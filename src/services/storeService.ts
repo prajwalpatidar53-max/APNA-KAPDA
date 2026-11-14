@@ -1,5 +1,9 @@
 import { supabase, isSupabaseConfigured, SUPABASE_URL } from '../lib/supabase';
 import { PREVIEW_PRODUCTS } from '../data/catalog';
+import {
+  normalizeProductImages,
+  resolveProductImageUrl,
+} from '../utils/imageUrl';
 import type {
   Order,
   OrderItem,
@@ -75,7 +79,10 @@ export async function fetchActiveProducts(): Promise<CatalogFetchResult> {
     };
   }
 
-  return { products: data as Product[], source: 'supabase' };
+  return {
+    products: (data as Product[]).map(normalizeProductImages),
+    source: 'supabase',
+  };
 }
 
 export async function fetchAllProductsAdmin(): Promise<{
@@ -95,7 +102,9 @@ export async function fetchAllProductsAdmin(): Promise<{
     logDbError('fetchAllProductsAdmin', 'products', error);
     return { products: [], error: error.message };
   }
-  return { products: (data as Product[]) ?? [] };
+  return {
+    products: ((data as Product[]) ?? []).map(normalizeProductImages),
+  };
 }
 
 export async function saveProductAdmin(
@@ -363,7 +372,14 @@ export async function fetchCustomerOrders(
     logDbError('fetchCustomerOrders', 'orders', error);
     return { orders: [], error: error.message };
   }
-  return { orders: (data as Order[]) ?? [] };
+  const normalizedOrders = ((data as Order[]) ?? []).map((order) => ({
+    ...order,
+    order_items: (order.order_items ?? []).map((item) => ({
+      ...item,
+      product_image: resolveProductImageUrl(item.product_image) || item.product_image,
+    })),
+  }));
+  return { orders: normalizedOrders };
 }
 
 export async function fetchAllOrdersAdmin(): Promise<{

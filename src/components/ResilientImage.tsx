@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Shirt } from 'lucide-react';
+import { resolveProductImageUrl } from '../utils/imageUrl';
 
 interface ResilientImageProps {
   src: string;
@@ -14,9 +15,14 @@ export function ResilientImage({
   className = '',
   loading = 'lazy',
 }: ResilientImageProps) {
+  const resolvedSrc = useMemo(() => resolveProductImageUrl(src), [src]);
   const [hasError, setHasError] = useState(false);
 
-  if (hasError || !src) {
+  useEffect(() => {
+    setHasError(false);
+  }, [resolvedSrc]);
+
+  if (hasError || !resolvedSrc) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#ede7db] to-[#dfd5c5] text-[#817b70] p-6 text-center ${className}`}
@@ -33,11 +39,18 @@ export function ResilientImage({
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       loading={loading}
       referrerPolicy="no-referrer"
-      onError={() => setHasError(true)}
+      onError={() => {
+        console.warn('[APNA KAPDA Image Load Failed]', {
+          alt,
+          attemptedSrc: resolvedSrc,
+          originalSrc: src,
+        });
+        setHasError(true);
+      }}
       className={className}
     />
   );

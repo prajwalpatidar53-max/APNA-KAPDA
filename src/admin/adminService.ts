@@ -1,6 +1,10 @@
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { PREVIEW_PRODUCTS } from '../data/catalog';
 import { isSupabaseConfigured, supabase, SUPABASE_URL } from '../lib/supabase';
+import {
+  normalizeProductImages,
+  resolveProductImageUrl,
+} from '../utils/imageUrl';
 import type {
   Order,
   OrderStatus,
@@ -249,16 +253,18 @@ export async function fetchAdminProducts(): Promise<{
     return { products: [], error: error.message };
   }
 
-  const normalized = ((data ?? []) as Product[]).map((item) => ({
-    ...item,
-    colors: Array.isArray(item.colors) ? item.colors : [],
-    gallery_images:
-      Array.isArray(item.gallery_images) && item.gallery_images.length > 0
-        ? item.gallery_images
-        : item.image_url
-          ? [item.image_url]
-          : [],
-  }));
+  const normalized = ((data ?? []) as Product[]).map((item) =>
+    normalizeProductImages({
+      ...item,
+      colors: Array.isArray(item.colors) ? item.colors : [],
+      gallery_images:
+        Array.isArray(item.gallery_images) && item.gallery_images.length > 0
+          ? item.gallery_images
+          : item.image_url
+            ? [item.image_url]
+            : [],
+    })
+  );
 
   return { products: normalized };
 }
@@ -462,7 +468,15 @@ export async function fetchAdminOrders(): Promise<{
     return { orders: [], error: error.message };
   }
 
-  return { orders: (data as Order[]) ?? [] };
+  const normalizedOrders = ((data as Order[]) ?? []).map((order) => ({
+    ...order,
+    order_items: (order.order_items ?? []).map((item) => ({
+      ...item,
+      product_image: resolveProductImageUrl(item.product_image) || item.product_image,
+    })),
+  }));
+
+  return { orders: normalizedOrders };
 }
 
 export async function updateAdminOrder(
