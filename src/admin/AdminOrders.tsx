@@ -6,16 +6,22 @@ import {
   CheckCircle2,
   MapPin,
   PackageCheck,
+  RefreshCw,
   Search,
   User,
   X,
 } from 'lucide-react';
 import { formatINR } from '../data/catalog';
-import type { Order, OrderStatus, PaymentStatus } from '../types';
-import { cancelOrderAdmin, updateAdminOrder } from './adminService';
+import type { Order, OrderStatus, PaymentStatus, Product } from '../types';
+import {
+  cancelOrderAdmin,
+  retryFailedStockRestorationAdmin,
+  updateAdminOrder,
+} from './adminService';
 
 interface AdminOrdersProps {
   orders: Order[];
+  products?: Product[];
   loading: boolean;
   initialOrderId?: string | null;
   onClearInitialOrder?: () => void;
@@ -127,6 +133,7 @@ function getAdminRefundSummary(order: Order): string {
 
 export function AdminOrders({
   orders,
+  products = [],
   loading,
   initialOrderId,
   onClearInitialOrder,
@@ -147,6 +154,10 @@ export function AdminOrders({
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
+
+  const [retryingStock, setRetryingStock] = useState(false);
+  const [retryingItemId, setRetryingItemId] = useState<string | null>(null);
+  const [replacementProductByItem, setReplacementProductByItem] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (initialOrderId) {
@@ -250,14 +261,58 @@ export function AdminOrders({
     setCancelReason('');
     await onRefresh();
 
-    const message = wasPaid
+    const baseMessage = wasPaid
       ? `Order ${cancelledNum} cancelled (restored ${restoredCount} unit(s)). Payment marked Refund Pending.`
       : `Order ${cancelledNum} cancelled (restored ${restoredCount} unit(s) to stock).`;
+    const message = res.warning ? `${baseMessage} Warning: ${res.warning}` : baseMessage;
+    const noticeType: 'ok' | 'err' = res.warning ? 'err' : 'ok';
 
-    setListNotice({ type: 'ok', text: message });
+    setListNotice({ type: noticeType, text: message });
     if (selectedOrder && selectedOrder.id === cancelTarget.id) {
-      setFeedback({ type: 'ok', text: message });
+      setFeedback({ type: noticeType, text: message });
     }
+  };
+
+  const handleRetryStockRestoration = async (
+    orderId: string,
+    orderItemId?: string | null,
+    targetProductUuid?: string | null
+  ) => {
+    if (retryingStock) return;
+    setRetryingStock(true);
+    setRetryingItemId(orderItemId ?? 'ALL');
+    setFeedback(null);
+    setListNotice(null);
+
+    const res = await retryFailedStockRestorationAdmin({
+      orderId,
+      orderItemId: orderItemId ?? null,
+      targetProductUuid: targetProductUuid || null,
+    });
+
+    setRetryingStock(false);
+    setRetryingItemId(null);
+
+    if (res.error) {
+      setFeedback({ type: 'err', text: res.error });
+      return;
+    }
+
+    await onRefresh();
+
+    const restoredCount = res.restoredUnits ?? 0;
+    const restoredItems = res.restoredItems ?? 0;
+    const remaining = res.remainingFailedItems ?? 0;
+
+    const msg =
+      remaining === 0
+        ? `Stock restoration completed: restored ${restoredCount} unit(s) across ${restoredItems} item(s).`
+        : res.warning ||
+          `Restored ${restoredCount} unit(s), but ${remaining} item(s) still need manual review.`;
+
+    const msgType: 'ok' | 'err' = remaining > 0 ? 'err' : 'ok';
+    setFeedback({ type: msgType, text: msg });
+    setListNotice({ type: msgType, text: msg });
   };
 
   return (
@@ -495,7 +550,16 @@ export function AdminOrders({
                     <span>
                       Stock Restored:{' '}
                       <strong className="text-[#211f1b]">
-                        {selectedOrder.stock_restored ? 'Yes' : 'Pending / N/A'}
+                        {selectedOrder.stock_restoration_status === 'restored' ||
+                        selectedOrder.stock_restored
+                          ? 'Yes (Complete)'
+                          : selectedOrder.stock_restoration_status === 'partial'
+                            ? 'Partial (Some products deleted/missing)'
+                            : selectedOrder.stock_restoration_status === 'failed'
+                              ? 'Failed (Product record missing)'
+                              : selectedOrder.stock_deducted
+                                ? 'Pending'
+                                : 'N/A (Historical / Non-deducted)'}
                       </strong>
                     </span>
                     <span>
@@ -505,6 +569,30 @@ export function AdminOrders({
                       </strong>
                     </span>
                   </div>
+
+                  {(selectedOrder.stock_restoration_status === 'failed' ||
+                    selectedOrder.stock_restoration_status === 'partial') && (
+                    <div className="pt-2 border-t border-[#fecaca] flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] text-[#7f1d1d]">
+                        Fix any missing product or size mismatch below, then retry stock restoration atomically.
+                      </span>
+                      <button
+                        type="button"
+                        disabled={retryingStock}
+                        onClick={() => handleRetryStockRestoration(selectedOrder.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#24231f] text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`w-3 h-3 ${retryingItemId === 'ALL' ? 'animate-spin' : ''}`}
+                        />
+                        <span>
+                          {retryingItemId === 'ALL'
+                            ? 'Retrying...'
+                            : 'Retry All Failed Items'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -651,34 +739,111 @@ export function AdminOrders({
                   </span>
                 </div>
                 <div className="divide-y divide-[#e5dfd3]">
-                  {(selectedOrder.order_items ?? []).map((item, idx) => (
-                    <div
-                      key={item.id ?? `${item.product_id}-${idx}`}
-                      className="p-4 flex items-center gap-3.5"
-                    >
-                      <div className="w-12 h-16 bg-[#e9e3d8] overflow-hidden shrink-0">
-                        {item.product_image && (
-                          <img
-                            src={item.product_image}
-                            alt={item.product_name}
-                            className="w-full h-full object-cover"
-                          />
+                  {(selectedOrder.order_items ?? []).map((item, idx) => {
+                    const itemKey = item.id ?? `${item.product_id}-${idx}`;
+                    const isFailedItem =
+                      selectedOrder.order_status === 'cancelled' &&
+                      Boolean(item.stock_deducted) &&
+                      !item.stock_restored &&
+                      item.stock_restoration_status === 'failed' &&
+                      Boolean(item.id);
+
+                    return (
+                      <div key={itemKey} className="p-4 space-y-2.5">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-16 bg-[#e9e3d8] overflow-hidden shrink-0">
+                            {item.product_image && (
+                              <img
+                                src={item.product_image}
+                                alt={item.product_name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[#211f1b] truncate">
+                              {item.product_name}
+                            </p>
+                            <p className="text-[11px] text-[#817b70] mt-0.5 tabular-nums">
+                              Size: {item.selected_size} &middot; Qty: {item.quantity}{' '}
+                              &middot; {formatINR(item.unit_price_inr)} each
+                            </p>
+                            {selectedOrder.order_status === 'cancelled' && item.stock_deducted && (
+                              <p className="text-[10px] mt-1 font-semibold uppercase tracking-wider text-[#5f594f]">
+                                Stock Restoration:{' '}
+                                <span
+                                  className={
+                                    item.stock_restoration_status === 'restored'
+                                      ? 'text-[#2b6345]'
+                                      : item.stock_restoration_status === 'failed'
+                                        ? 'text-[#b91c1c]'
+                                        : 'text-[#5f594f]'
+                                  }
+                                >
+                                  {item.stock_restoration_status ?? 'pending'}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                          <p className="text-xs font-semibold text-[#211f1b] tabular-nums">
+                            {formatINR(item.unit_price_inr * item.quantity)}
+                          </p>
+                        </div>
+
+                        {isFailedItem && item.id && (
+                          <div className="p-3 bg-[#fef2f2] border border-[#fecaca] space-y-2 text-[11px]">
+                            <p className="text-[#b91c1c] font-medium">
+                              {item.stock_restoration_error ||
+                                'Stock restoration failed for this item.'}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {products.length > 0 && (
+                                <select
+                                  value={replacementProductByItem[item.id] ?? ''}
+                                  onChange={(e) =>
+                                    setReplacementProductByItem((prev) => ({
+                                      ...prev,
+                                      [item.id!]: e.target.value,
+                                    }))
+                                  }
+                                  aria-label={`Replacement product for ${item.product_name}`}
+                                  className="flex-1 min-w-[180px] px-2.5 py-1.5 text-[11px] bg-[#fffdf8] border border-[#e5dfd3] outline-none text-[#211f1b]"
+                                >
+                                  <option value="">
+                                    Retry matching original product automatically
+                                  </option>
+                                  {products.map((prod) => (
+                                    <option key={prod.id} value={prod.id}>
+                                      {prod.name} (Stock: {prod.stock_count})
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              <button
+                                type="button"
+                                disabled={retryingStock}
+                                onClick={() =>
+                                  handleRetryStockRestoration(
+                                    selectedOrder.id,
+                                    item.id!,
+                                    replacementProductByItem[item.id!] || null
+                                  )
+                                }
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#24231f] text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                <RefreshCw
+                                  className={`w-3 h-3 ${retryingItemId === item.id ? 'animate-spin' : ''}`}
+                                />
+                                <span>
+                                  {retryingItemId === item.id ? 'Retrying...' : 'Retry Item'}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[#211f1b] truncate">
-                          {item.product_name}
-                        </p>
-                        <p className="text-[11px] text-[#817b70] mt-0.5 tabular-nums">
-                          Size: {item.selected_size} &middot; Qty: {item.quantity}{' '}
-                          &middot; {formatINR(item.unit_price_inr)} each
-                        </p>
-                      </div>
-                      <p className="text-xs font-semibold text-[#211f1b] tabular-nums">
-                        {formatINR(item.unit_price_inr * item.quantity)}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

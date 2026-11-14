@@ -360,6 +360,7 @@ export default function AdminPortal() {
           {activeTab === 'orders' && (
             <AdminOrders
               orders={orders}
+              products={products}
               loading={loadingData}
               initialOrderId={inspectOrderId}
               onClearInitialOrder={() => setInspectOrderId(null)}

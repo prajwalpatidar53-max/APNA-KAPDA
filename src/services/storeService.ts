@@ -297,40 +297,10 @@ export async function createOrder(params: {
     };
   }
 
-  const orderNumber = `AK-${Math.floor(100000 + Math.random() * 900000)}`;
-  const paymentStatus: PaymentStatus =
-    params.paymentMethod === 'cod' ? 'cod_due' : 'awaiting_payment';
-
-  const { data: orderData, error: orderError } = await supabase
-    .from('orders')
-    .insert({
-      order_number: orderNumber,
-      user_id: params.userId,
-      customer_name: params.customerName.trim(),
-      customer_email: params.customerEmail.trim(),
-      customer_phone: params.customerPhone.trim(),
-      shipping_address: params.shippingAddress,
-      payment_method: params.paymentMethod,
-      payment_status: paymentStatus,
-      order_status: 'pending',
-      subtotal_inr: params.subtotalInr,
-      shipping_inr: params.shippingInr,
-      total_inr: params.totalInr,
-      notes: params.notes?.trim() || null,
-    })
-    .select()
-    .single();
-
-  if (orderError || !orderData) {
-    if (orderError) logDbError('createOrder.insertOrder', 'orders', orderError);
-    return { error: orderError?.message || 'Unable to create order record.' };
-  }
-
   const uuidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  const lineItems = params.items.map((item) => ({
-    order_id: orderData.id,
+  const rpcItems = params.items.map((item) => ({
     product_uuid: uuidRegex.test(item.product_id) ? item.product_id : null,
     product_id: item.product_id,
     product_name: item.product_name,
@@ -340,19 +310,54 @@ export async function createOrder(params: {
     quantity: item.quantity,
   }));
 
-  const { error: itemsError } = await supabase.from('order_items').insert(lineItems);
+  // Single authoritative checkout path: single-transaction atomic order + line items + server pricing/shipping + stock validation.
+  // Passing p_order_number: null lets PostgreSQL generate the authoritative unique AK-XXXXXX order number.
+  const { data: atomicData, error: atomicError } = await supabase.rpc(
+    'create_order_atomic',
+    {
+      p_order_number: null,
+      p_customer_name: params.customerName.trim(),
+      p_customer_email: params.customerEmail.trim(),
+      p_customer_phone: params.customerPhone.trim(),
+      p_shipping_address: params.shippingAddress,
+      p_payment_method: params.paymentMethod,
+      p_subtotal_inr: params.subtotalInr,
+      p_shipping_inr: params.shippingInr,
+      p_total_inr: params.totalInr,
+      p_notes: params.notes?.trim() || null,
+      p_items: rpcItems,
+    }
+  );
 
-  if (itemsError) {
-    logDbError('createOrder.insertItems', 'order_items', itemsError);
-    return {
-      error: `Order saved (${orderNumber}), but line items failed: ${itemsError.message}`,
-    };
+  if (atomicError) {
+    if (atomicError.code === '42883' || atomicError.code === 'PGRST202') {
+      return {
+        error:
+          'Checkout RPC (create_order_atomic) is not installed in Supabase yet. Run supabase/order_cancellation_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logDbError('createOrder.atomic', 'rpc/create_order_atomic', atomicError);
+    return { error: atomicError.message || 'Unable to place order.' };
   }
+
+  const payload = atomicData as {
+    order?: Order;
+    order_items?: OrderItem[];
+  } | null;
+
+  if (!payload?.order) {
+    return { error: 'Checkout did not return a valid recorded order from Supabase.' };
+  }
+
+  const normalizedItems = (payload.order_items ?? rpcItems).map((item) => ({
+    ...item,
+    product_image: resolveProductImageUrl(item.product_image) || item.product_image,
+  }));
 
   return {
     order: {
-      ...(orderData as Order),
-      order_items: lineItems,
+      ...payload.order,
+      order_items: normalizedItems,
     },
   };
 }
@@ -385,7 +390,13 @@ export async function fetchCustomerOrders(
 export async function cancelCustomerOrder(
   orderId: string,
   reason?: string
-): Promise<{ order?: Order; restoredUnits?: number; error?: string }> {
+): Promise<{
+  order?: Order;
+  restoredUnits?: number;
+  stockRestorationStatus?: Order['stock_restoration_status'];
+  warning?: string;
+  error?: string;
+}> {
   if (!supabase || !isSupabaseConfigured) {
     return { error: 'Supabase is not configured.' };
   }
@@ -407,10 +418,17 @@ export async function cancelCustomerOrder(
     return { error: error.message };
   }
 
-  const payload = data as { order?: Order; restored_units?: number } | null;
+  const payload = data as {
+    order?: Order;
+    restored_units?: number;
+    stock_restoration_status?: Order['stock_restoration_status'];
+    warning?: string | null;
+  } | null;
   return {
     order: payload?.order,
     restoredUnits: payload?.restored_units ?? 0,
+    stockRestorationStatus: payload?.stock_restoration_status,
+    warning: payload?.warning ?? undefined,
   };
 }
 

@@ -84,6 +84,19 @@ export interface UserProfile {
   created_at?: string;
 }
 
+export type OrderStockRestorationStatus =
+  | 'not_applicable'
+  | 'pending'
+  | 'restored'
+  | 'partial'
+  | 'failed';
+
+export type OrderItemStockRestorationStatus =
+  | 'not_applicable'
+  | 'deducted'
+  | 'restored'
+  | 'failed';
+
 export interface OrderItem {
   id?: string;
   order_id?: string;
@@ -94,6 +107,10 @@ export interface OrderItem {
   selected_size: string;
   unit_price_inr: number;
   quantity: number;
+  stock_deducted?: boolean;
+  stock_restored?: boolean;
+  stock_restoration_status?: OrderItemStockRestorationStatus;
+  stock_restoration_error?: string | null;
   created_at?: string;
 }
 
@@ -116,7 +133,9 @@ export interface Order {
   cancelled_by?: 'customer' | 'admin' | null;
   cancelled_by_user_id?: string | null;
   cancellation_reason?: string | null;
+  stock_deducted?: boolean;
   stock_restored?: boolean;
+  stock_restoration_status?: OrderStockRestorationStatus;
   refund_status?: RefundStatus;
   created_at: string;
   order_items?: OrderItem[];

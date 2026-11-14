@@ -52,6 +52,9 @@ export default function App() {
     setLoadingProducts(true);
     const res = await fetchActiveProducts();
     setProducts(res.products);
+    setSelectedProduct((prev) =>
+      prev ? res.products.find((p) => p.id === prev.id) ?? prev : null
+    );
     setLoadingProducts(false);
   }, []);
 
@@ -273,7 +276,10 @@ export default function App() {
             onRequireAuth={() =>
               handleOpenAuth('login', 'Sign in or create an account to place your order.')
             }
-            onOrderCreated={() => setCart([])}
+            onOrderCreated={() => {
+              setCart([]);
+              void loadCatalog();
+            }}
             onViewOrders={() => navigateView('account')}
           />
         )}
