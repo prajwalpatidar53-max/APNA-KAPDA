@@ -1,0 +1,6 @@
+{
+  "name": "APNA KAPDA",
+  "description": "Apna Style. Apna Andaaz. Contemporary Indian fashion for Men, Women & Unisex.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

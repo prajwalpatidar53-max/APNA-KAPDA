@@ -1,0 +1,699 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APNA KAPDA — Apna Style. Apna Andaaz.</title>
+<meta name="description" content="Discover APNA KAPDA — Indian contemporary fashion for everyone.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --bg:#f5f2eb;
+  --paper:#fffdf8;
+  --ink:#211f1b;
+  --muted:#817b70;
+  --line:#e5dfd3;
+  --accent:#9a6746;
+  --dark:#24231f;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:'DM Sans',sans-serif;overflow-x:hidden;
+}
+button,input{font:inherit}
+button{cursor:pointer}
+a{text-decoration:none;color:inherit}
+img{display:block;width:100%;object-fit:cover}
+.announcement{
+  background:var(--dark);color:#eee6d8;text-align:center;
+  padding:9px 12px;font-size:10px;letter-spacing:2px;
+}
+header{
+  height:78px;padding:0 6%;display:flex;align-items:center;
+  justify-content:space-between;background:rgba(245,242,235,.94);
+  position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);
+  backdrop-filter:blur(14px);
+}
+.logo{font-weight:700;font-size:24px;letter-spacing:3px}
+.logo span{color:var(--accent)}
+nav{display:flex;gap:30px;font-size:12px;letter-spacing:1px}
+nav a{transition:.25s}
+nav a:hover{color:var(--accent)}
+.header-actions{display:flex;align-items:center;gap:20px}
+.icon-btn{border:0;background:none;font-size:19px;position:relative}
+.cart-count{
+  position:absolute;top:-8px;right:-9px;background:var(--accent);
+  color:white;border-radius:50%;font-size:9px;width:17px;height:17px;
+  display:grid;place-items:center;
+}
+.login-btn{
+  border:1px solid var(--ink);padding:10px 18px;background:transparent;
+  font-size:11px;letter-spacing:1px;transition:.25s;
+}
+.login-btn:hover{background:var(--ink);color:white}
+.menu-btn{display:none}
+
+.hero{
+  min-height:620px;display:grid;grid-template-columns:1fr 1fr;
+  padding:45px 6% 55px;gap:35px;align-items:center;
+}
+.hero-copy{padding:35px 0;animation:rise .9s ease both}
+.eyebrow{font-size:10px;letter-spacing:4px;color:var(--accent);font-weight:700}
+.hero h1{
+  font-family:'Playfair Display',serif;font-size:clamp(52px,7vw,91px);
+  line-height:1.02;font-weight:500;margin:22px 0;
+}
+.hero h1 em{color:var(--accent);font-weight:500}
+.hero p{color:var(--muted);font-size:14px;line-height:1.9;max-width:410px}
+.primary-btn{
+  background:var(--dark);color:white;border:1px solid var(--dark);
+  padding:16px 25px;font-size:11px;letter-spacing:2px;
+  display:inline-flex;align-items:center;gap:20px;margin-top:30px;
+  transition:.3s;
+}
+.primary-btn:hover{background:var(--accent);border-color:var(--accent);transform:translateY(-4px)}
+.hero-image{height:530px;position:relative;perspective:1000px}
+.hero-image img{
+  height:100%;border-radius:3px;object-position:center;
+  box-shadow:20px 25px 60px #30271c22;transition:transform .4s;
+}
+.hero-note{
+  position:absolute;bottom:25px;left:-25px;background:var(--paper);
+  padding:18px 23px;box-shadow:0 10px 35px #0001;
+  font-family:'Playfair Display',serif;font-size:17px;
+}
+.hero-note small{display:block;font-family:'DM Sans';font-size:9px;
+  letter-spacing:2px;color:var(--muted);margin-top:6px}
+
+.section{padding:85px 6%}
+.section-heading{text-align:center;margin-bottom:42px}
+.section-heading .eyebrow{margin-bottom:13px}
+.section-heading h2{
+  font:500 clamp(32px,4vw,48px) 'Playfair Display',serif;
+}
+.section-heading p{font-size:12px;color:var(--muted);margin-top:12px}
+.categories{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.category{height:390px;position:relative;overflow:hidden;cursor:pointer}
+.category img{height:100%;transition:transform .8s}
+.category:hover img{transform:scale(1.08)}
+.category:after{content:"";position:absolute;inset:35% 0 0;background:linear-gradient(transparent,#0009)}
+.category-info{position:absolute;bottom:25px;left:25px;color:white;z-index:2}
+.category-info h3{font:500 32px 'Playfair Display',serif}
+.category-info span{font-size:10px;letter-spacing:2px}
+
+.products-section{background:var(--paper)}
+.product-toolbar{
+  display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:35px;
+}
+.filter-btn{
+  background:transparent;border:1px solid var(--line);padding:10px 19px;
+  font-size:10px;letter-spacing:1px;transition:.25s;
+}
+.filter-btn.active,.filter-btn:hover{background:var(--dark);color:white;border-color:var(--dark)}
+.product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+.product-card{min-width:0;transition:transform .25s;transform-style:preserve-3d}
+.product-image{height:310px;position:relative;overflow:hidden;background:#e9e3d8}
+.product-image img{height:100%;transition:transform .65s}
+.product-card:hover .product-image img{transform:scale(1.06)}
+.product-tag{
+  position:absolute;top:13px;left:13px;background:var(--paper);
+  padding:7px 10px;font-size:9px;letter-spacing:1px;
+}
+.quick-add{
+  position:absolute;bottom:12px;left:12px;right:12px;
+  background:var(--paper);border:0;padding:13px;font-size:10px;
+  letter-spacing:1px;transform:translateY(65px);transition:.3s;
+}
+.product-card:hover .quick-add{transform:translateY(0)}
+.product-details{padding:15px 2px}
+.product-details h3{font-size:13px;font-weight:600}
+.product-details p{font-size:10px;color:var(--muted);margin-top:6px}
+.price{font-size:13px;margin-top:10px;font-weight:700}
+.old-price{color:#a6a095;text-decoration:line-through;margin-left:8px;font-weight:400}
+
+.story{
+  display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;
+  background:#e9e2d6;
+}
+.story-image{height:480px}
+.story-image img{height:100%}
+.story-copy h2{font:500 clamp(35px,4vw,52px) 'Playfair Display',serif;margin:18px 0}
+.story-copy p{font-size:13px;line-height:2;color:#69645b;max-width:440px}
+
+.newsletter{text-align:center;background:var(--dark);color:white}
+.newsletter p{color:#bdb5a8;font-size:12px;margin:14px 0 25px}
+.newsletter-form{display:flex;max-width:430px;margin:auto}
+.newsletter-form input{
+  flex:1;min-width:0;padding:15px;border:1px solid #625e55;
+  background:transparent;color:white;outline:none;
+}
+.newsletter-form button{background:#e5d6c1;color:#24231f;border:0;padding:0 20px;font-size:10px;letter-spacing:1px}
+
+footer{padding:45px 6%;background:#1b1a17;color:#eee8dc}
+.footer-top{display:flex;justify-content:space-between;gap:25px;flex-wrap:wrap}
+footer .logo{font-size:22px}
+footer p{font-size:11px;color:#aaa396;margin-top:12px;line-height:1.8}
+.footer-links{display:flex;gap:20px;font-size:11px;color:#c9c1b5}
+.footer-bottom{border-top:1px solid #403d36;margin-top:35px;padding-top:20px;
+  font-size:10px;color:#9c968a;display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
+
+/* CART */
+.overlay{
+  position:fixed;inset:0;background:#0007;z-index:90;
+  opacity:0;visibility:hidden;transition:.3s;
+}
+.overlay.show{opacity:1;visibility:visible}
+.cart-drawer{
+  position:fixed;z-index:100;right:0;top:0;height:100%;
+  width:min(430px,100%);background:var(--paper);padding:25px;
+  transform:translateX(100%);transition:.4s;display:flex;flex-direction:column;
+}
+.cart-drawer.show{transform:translateX(0)}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.drawer-head h2{font:25px 'Playfair Display'}
+.close-btn{border:0;background:none;font-size:24px}
+.cart-items{overflow:auto;flex:1;padding:15px 0}
+.cart-item{display:grid;grid-template-columns:75px 1fr auto;gap:13px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cart-item img{height:90px}
+.cart-item h4{font-size:12px;margin:5px 0}
+.cart-item p{font-size:11px;color:var(--muted)}
+.qty{display:flex;align-items:center;gap:10px;margin-top:10px}
+.qty button{border:1px solid var(--line);background:none;width:24px;height:24px}
+.remove{border:0;background:none;color:#9a6746;font-size:11px}
+.cart-bottom{border-top:1px solid var(--line);padding-top:20px}
+.total{display:flex;justify-content:space-between;font-weight:700}
+.checkout{width:100%;justify-content:center;margin-top:18px}
+
+/* AUTH */
+.auth-modal{
+  position:fixed;z-index:110;left:50%;top:50%;
+  transform:translate(-50%,-45%) scale(.96);
+  width:min(420px,92%);background:var(--paper);padding:35px;
+  opacity:0;visibility:hidden;transition:.3s;box-shadow:0 20px 80px #0003;
+}
+.auth-modal.show{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1)}
+.auth-close{position:absolute;right:18px;top:14px;border:0;background:none;font-size:23px}
+.auth-modal h2{font:32px 'Playfair Display';margin:12px 0 6px}
+.auth-modal>p{font-size:11px;color:var(--muted);margin-bottom:22px}
+.auth-modal input{
+  width:100%;padding:14px;margin:7px 0;border:1px solid var(--line);
+  background:#fffdf8;outline:none;font-size:12px;
+}
+.auth-modal input:focus{border-color:var(--accent)}
+.auth-submit{width:100%;justify-content:center;margin-top:15px}
+.auth-switch{text-align:center;font-size:11px;color:var(--muted);margin-top:18px}
+.auth-switch button,.forgot{border:0;background:none;color:var(--accent);text-decoration:underline;font-size:11px}
+.forgot{display:block;margin:12px 0 0 auto}
+.message{font-size:11px;margin-top:12px;line-height:1.6;color:var(--accent);min-height:16px}
+.user-label{font-size:10px;color:var(--accent);max-width:100px;overflow:hidden;text-overflow:ellipsis}
+
+/* ANIMATIONS */
+.reveal{opacity:0;transform:translateY(25px);transition:opacity .7s,transform .7s}
+.reveal.visible{opacity:1;transform:translateY(0)}
+@keyframes rise{from{opacity:0;transform:translateY(25px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:900px){
+ .product-grid{grid-template-columns:repeat(2,1fr)}
+ .product-image{height:350px}
+ .hero{min-height:auto}
+ .hero-image{height:440px}
+}
+@media(max-width:650px){
+ header{height:67px;padding:0 5%}
+ .logo{font-size:19px}
+ nav{
+   display:none;position:absolute;top:67px;left:0;right:0;
+   background:var(--paper);padding:25px;flex-direction:column;gap:22px;
+   border-bottom:1px solid var(--line);
+ }
+ nav.open{display:flex}
+ .menu-btn{display:block}
+ .login-btn{padding:8px 10px;font-size:9px}
+ .header-actions{gap:13px}
+ .hero{grid-template-columns:1fr;padding:40px 6%;gap:25px}
+ .hero-copy{padding:10px 0}
+ .hero h1{font-size:59px}
+ .hero-image{height:420px;margin-left:15px}
+ .hero-note{left:-15px}
+ .section{padding:65px 5%}
+ .categories{grid-template-columns:1fr;gap:15px}
+ .category{height:390px}
+ .product-grid{gap:12px}
+ .product-image{height:240px}
+ .quick-add{transform:translateY(0);padding:11px}
+ .product-details h3{font-size:12px}
+ .story{grid-template-columns:1fr;gap:30px}
+ .story-image{height:350px}
+ .story-copy{padding-bottom:10px}
+ .newsletter-form{width:100%}
+ .footer-links{flex-wrap:wrap}
+}
+@media(max-width:380px){
+ .product-image{height:200px}
+ .hero h1{font-size:49px}
+ .icon-btn{font-size:17px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="announcement">FREE SHIPPING ON ORDERS ABOVE ₹1,499 &nbsp; | &nbsp; MADE FOR EVERY YOU</div>
+
+<header>
+  <a href="#" class="logo">APNA<span>.</span>KAPDA</a>
+
+  <nav id="nav">
+    <a href="#home">HOME</a>
+    <a href="#collections">COLLECTIONS</a>
+    <a href="#shop">SHOP</a>
+    <a href="#story">OUR STORY</a>
+  </nav>
+
+  <div class="header-actions">
+    <span id="userLabel" class="user-label"></span>
+    <button class="login-btn" id="loginButton" onclick="openAuth()">SIGN IN</button>
+    <button class="icon-btn" onclick="openCart()" aria-label="Open cart">🛍<span class="cart-count" id="cartCount">0</span></button>
+    <button class="icon-btn menu-btn" onclick="toggleMenu()">☰</button>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="home">
+  <div class="hero-copy">
+    <div class="eyebrow">A NEW INDIAN FASHION LABEL</div>
+    <h1>Apna Style.<br><em>Apna Andaaz.</em></h1>
+    <p>Not just clothes. It's your identity. Discover everyday essentials, statement pieces and timeless styles made for everyone.</p>
+    <a href="#shop" class="primary-btn">EXPLORE COLLECTION <span>↗</span></a>
+  </div>
+  <div class="hero-image" id="heroTilt">
+    <img src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=1100&q=85" alt="Fashion collection">
+    <div class="hero-note">Wear your identity.<small>APNA KAPDA — EST. 2026</small></div>
+  </div>
+</section>
+
+<section class="section" id="collections">
+  <div class="section-heading reveal">
+    <div class="eyebrow">FIND YOUR STYLE</div>
+    <h2>Made for every version of you.</h2>
+    <p>One label. Every style. Every mood.</p>
+  </div>
+
+  <div class="categories">
+    <div class="category reveal" onclick="filterProducts('Men')">
+      <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=85" alt="Men fashion">
+      <div class="category-info"><h3>Men</h3><span>EXPLORE COLLECTION ↗</span></div>
+    </div>
+    <div class="category reveal" onclick="filterProducts('Women')">
+      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=85" alt="Women fashion">
+      <div class="category-info"><h3>Women</h3><span>EXPLORE COLLECTION ↗</span></div>
+    </div>
+    <div class="category reveal" onclick="filterProducts('Unisex')">
+      <img src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=800&q=85" alt="Unisex fashion">
+      <div class="category-info"><h3>Unisex</h3><span>EXPLORE COLLECTION ↗</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section products-section" id="shop">
+  <div class="section-heading reveal">
+    <div class="eyebrow">THE APNA EDIT</div>
+    <h2>Our favourites.</h2>
+    <p>Pieces you'll keep coming back to.</p>
+  </div>
+
+  <div class="product-toolbar">
+    <button class="filter-btn active" onclick="filterProducts('All',this)">ALL</button>
+    <button class="filter-btn" onclick="filterProducts('Men',this)">MEN</button>
+    <button class="filter-btn" onclick="filterProducts('Women',this)">WOMEN</button>
+    <button class="filter-btn" onclick="filterProducts('Unisex',this)">UNISEX</button>
+  </div>
+
+  <div class="product-grid" id="productGrid"></div>
+</section>
+
+<section class="section story" id="story">
+  <div class="story-image reveal">
+    <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1000&q=85" alt="Fashion and lifestyle">
+  </div>
+  <div class="story-copy reveal">
+    <div class="eyebrow">OUR PHILOSOPHY</div>
+    <h2>Not made to fit in. Made to be you.</h2>
+    <p>APNA KAPDA is built around a simple thought — style should feel like you. Inspired by the spirit of India and designed for today's world, we bring together everyday comfort, individual expression and timeless fashion.</p>
+    <a href="#shop" class="primary-btn">DISCOVER OUR WORLD ↗</a>
+  </div>
+</section>
+
+<section class="section newsletter">
+  <div class="eyebrow">STAY IN THE LOOP</div>
+  <h2 style="font:500 39px 'Playfair Display';margin-top:14px">A little style in your inbox.</h2>
+  <p>Get updates on new drops, collections and exclusive offers.</p>
+  <form class="newsletter-form" onsubmit="subscribe(event)">
+    <input type="email" id="newsletterEmail" placeholder="Enter your email address" required>
+    <button type="submit">SUBSCRIBE ↗</button>
+  </form>
+  <div class="message" id="newsletterMessage"></div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-top">
+    <div>
+      <a href="#" class="logo">APNA<span>.</span>KAPDA</a>
+      <p>Apna Style. Apna Andaaz.<br>Indian fashion, made for everyone.</p>
+    </div>
+    <div class="footer-links">
+      <a href="#shop">Shop</a>
+      <a href="#collections">Collections</a>
+      <a href="#story">Our Story</a>
+      <a href="mailto:hello@apnakapda.com">Contact</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 APNA KAPDA. ALL RIGHTS RESERVED.</span>
+    <span>MADE WITH STYLE IN INDIA 🇮🇳</span>
+  </div>
+</footer>
+
+<div class="overlay" id="overlay" onclick="closePanels()"></div>
+
+<aside class="cart-drawer" id="cartDrawer">
+  <div class="drawer-head">
+    <h2>Your bag</h2>
+    <button class="close-btn" onclick="closePanels()">×</button>
+  </div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-bottom">
+    <div class="total"><span>Subtotal</span><span id="cartTotal">₹0</span></div>
+    <p style="font-size:10px;color:var(--muted);margin-top:10px">Shipping and taxes calculated at checkout.</p>
+    <button class="primary-btn checkout" onclick="checkout()">PROCEED TO CHECKOUT ↗</button>
+  </div>
+</aside>
+
+<div class="auth-modal" id="authModal">
+  <button class="auth-close" onclick="closePanels()">×</button>
+  <div class="eyebrow">WELCOME TO APNA KAPDA</div>
+  <h2 id="authTitle">Welcome back.</h2>
+  <p id="authDescription">Sign in to continue your style journey.</p>
+
+  <input type="text" id="authName" placeholder="Your full name" style="display:none">
+  <input type="email" id="authEmail" placeholder="Email address">
+  <input type="password" id="authPassword" placeholder="Password">
+
+  <button class="forgot" id="forgotButton" onclick="resetPassword()">Forgot password?</button>
+  <button class="primary-btn auth-submit" id="authSubmit" onclick="handleAuth()">SIGN IN ↗</button>
+  <div class="message" id="authMessage"></div>
+  <div class="auth-switch" id="authSwitch">New here? <button onclick="switchAuth('signup')">Create an account</button></div>
+</div>
+
+<script>
+/* =====================================
+   SUPABASE CONFIGURATION
+   Replace these two values with your
+   Supabase project URL and anon/publishable key.
+===================================== */
+
+const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+let supabaseClient = null;
+
+if(window.supabase && SUPABASE_URL.startsWith("https://") &&
+   SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY"){
+  supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
+}
+
+/* PRODUCTS — demo products; replace with your actual catalogue */
+const products = [
+ {id:1,name:"Classic Oversized Tee",category:"Unisex",type:"T-Shirts",price:799,old:999,tag:"BESTSELLER",image:"https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=700&q=85"},
+ {id:2,name:"Everyday Linen Shirt",category:"Men",type:"Shirts",price:1299,old:1599,tag:"NEW DROP",image:"https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=700&q=85"},
+ {id:3,name:"Modern Essential Top",category:"Women",type:"Tops",price:899,old:1199,tag:"POPULAR",image:"https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&w=700&q=85"},
+ {id:4,name:"Relaxed Fit Trousers",category:"Men",type:"Bottomwear",price:1499,old:1799,tag:"LIMITED",image:"https://images.unsplash.com/photo-1473966968600-fa801b869a1a?auto=format&fit=crop&w=700&q=85"},
+ {id:5,name:"Everyday Street Tee",category:"Women",type:"T-Shirts",price:749,old:999,tag:"TRENDING",image:"https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=700&q=85"},
+ {id:6,name:"Urban Layer Shirt",category:"Unisex",type:"Shirts",price:1199,old:1499,tag:"NEW",image:"https://images.unsplash.com/photo-1603252109303-2751441dd157?auto=format&fit=crop&w=700&q=85"},
+ {id:7,name:"Signature Denim",category:"Men",type:"Denim",price:1799,old:2199,tag:"BESTSELLER",image:"https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=700&q=85"},
+ {id:8,name:"Minimal Daily Dress",category:"Women",type:"Dresses",price:1599,old:1999,tag:"NEW DROP",image:"https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=700&q=85"}
+];
+
+let cart = JSON.parse(localStorage.getItem("apnaCart") || "[]");
+let currentFilter = "All";
+let authMode = "login";
+let currentUser = null;
+
+const money = n => "₹" + Number(n).toLocaleString("en-IN");
+
+function renderProducts(){
+ const list = currentFilter==="All" ? products :
+   products.filter(p=>p.category===currentFilter);
+
+ document.getElementById("productGrid").innerHTML = list.map(p=>`
+  <article class="product-card">
+   <div class="product-image">
+    <img src="${p.image}" alt="${p.name}" loading="lazy">
+    <span class="product-tag">${p.tag}</span>
+    <button class="quick-add" onclick="addToCart(${p.id})">ADD TO BAG +</button>
+   </div>
+   <div class="product-details">
+    <h3>${p.name}</h3>
+    <p>${p.category} · ${p.type}</p>
+    <div class="price">${money(p.price)} <span class="old-price">${money(p.old)}</span></div>
+   </div>
+  </article>
+ `).join("");
+}
+
+function filterProducts(category,button){
+ currentFilter=category;
+ document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+ if(button)button.classList.add("active");
+ else{
+  document.querySelectorAll(".filter-btn").forEach(b=>{
+   if(b.textContent.trim().toLowerCase()===category.toLowerCase())b.classList.add("active");
+  });
+ }
+ renderProducts();
+ document.getElementById("shop").scrollIntoView({behavior:"smooth"});
+}
+
+function saveCart(){
+ localStorage.setItem("apnaCart",JSON.stringify(cart));
+ renderCart();
+}
+
+function addToCart(id){
+ const found=cart.find(x=>x.id===id);
+ if(found)found.qty++;
+ else cart.push({id,qty:1});
+ saveCart();
+ openCart();
+}
+
+function changeQty(id,change){
+ const item=cart.find(x=>x.id===id);
+ if(!item)return;
+ item.qty+=change;
+ if(item.qty<=0)cart=cart.filter(x=>x.id!==id);
+ saveCart();
+}
+
+function renderCart(){
+ const count=cart.reduce((s,x)=>s+x.qty,0);
+ document.getElementById("cartCount").textContent=count;
+ const container=document.getElementById("cartItems");
+ if(!cart.length){
+  container.innerHTML='<p style="text-align:center;color:var(--muted);padding:40px 10px;font-size:13px">Your bag is waiting for something special.</p>';
+ }else{
+  container.innerHTML=cart.map(item=>{
+   const p=products.find(x=>x.id===item.id);
+   if(!p)return "";
+   return `<div class="cart-item">
+    <img src="${p.image}" alt="${p.name}">
+    <div><h4>${p.name}</h4><p>${money(p.price)}</p>
+    <div class="qty">
+     <button onclick="changeQty(${p.id},-1)">−</button>
+     <span>${item.qty}</span>
+     <button onclick="changeQty(${p.id},1)">+</button>
+    </div></div>
+    <button class="remove" onclick="changeQty(${p.id},-${item.qty})">Remove</button>
+   </div>`;
+  }).join("");
+ }
+ const total=cart.reduce((s,item)=>{
+  const p=products.find(x=>x.id===item.id);
+  return s+(p?p.price*item.qty:0);
+ },0);
+ document.getElementById("cartTotal").textContent=money(total);
+}
+
+function openCart(){
+ document.getElementById("overlay").classList.add("show");
+ document.getElementById("cartDrawer").classList.add("show");
+ document.getElementById("authModal").classList.remove("show");
+}
+function openAuth(){
+ document.getElementById("overlay").classList.add("show");
+ document.getElementById("authModal").classList.add("show");
+ document.getElementById("cartDrawer").classList.remove("show");
+}
+function closePanels(){
+ document.getElementById("overlay").classList.remove("show");
+ document.getElementById("cartDrawer").classList.remove("show");
+ document.getElementById("authModal").classList.remove("show");
+}
+function toggleMenu(){document.getElementById("nav").classList.toggle("open")}
+document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>document.getElementById("nav").classList.remove("open")));
+
+function switchAuth(mode){
+ authMode=mode;
+ const signup=mode==="signup";
+ document.getElementById("authTitle").textContent=signup?"Create your account.":"Welcome back.";
+ document.getElementById("authDescription").textContent=signup?"Join APNA KAPDA and find your style.":"Sign in to continue your style journey.";
+ document.getElementById("authName").style.display=signup?"block":"none";
+ document.getElementById("authPassword").style.display="block";
+ document.getElementById("forgotButton").style.display=signup?"none":"block";
+ document.getElementById("authSubmit").textContent=signup?"CREATE ACCOUNT ↗":"SIGN IN ↗";
+ document.getElementById("authSwitch").innerHTML=signup?
+  'Already a member? <button onclick="switchAuth(\\'login\\')">Sign in</button>':
+  'New here? <button onclick="switchAuth(\\'signup\\')">Create an account</button>';
+ document.getElementById("authMessage").textContent="";
+}
+
+async function handleAuth(){
+ const msg=document.getElementById("authMessage");
+ const email=document.getElementById("authEmail").value.trim();
+ const password=document.getElementById("authPassword").value;
+ const name=document.getElementById("authName").value.trim();
+
+ if(!email||!password){msg.textContent="Please enter your email and password.";return;}
+ if(password.length<6){msg.textContent="Password must be at least 6 characters.";return;}
+ if(!supabaseClient){msg.textContent="Add your Supabase URL and anon key in the code first.";return;}
+
+ msg.textContent="Please wait...";
+ let result;
+
+ if(authMode==="signup"){
+  result=await supabaseClient.auth.signUp({
+   email,password,
+   options:{data:{full_name:name}}
+  });
+ }else{
+  result=await supabaseClient.auth.signInWithPassword({email,password});
+ }
+
+ if(result.error){msg.textContent=result.error.message;return;}
+ if(authMode==="signup"&&!result.data.session){
+  msg.textContent="Account created! Check your email to confirm your account.";
+  return;
+ }
+ msg.textContent="Success! Welcome to APNA KAPDA.";
+ await getUser();
+ setTimeout(closePanels,900);
+}
+
+async function resetPassword(){
+ const email=document.getElementById("authEmail").value.trim();
+ const msg=document.getElementById("authMessage");
+ if(!email){msg.textContent="Enter your email address first.";return;}
+ if(!supabaseClient){msg.textContent="Add your Supabase keys first.";return;}
+ msg.textContent="Sending reset link...";
+ const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{
+  redirectTo:window.location.origin
+ });
+ msg.textContent=error?error.message:"If this email is registered, a password reset link has been sent.";
+}
+
+async function getUser(){
+ if(!supabaseClient)return;
+ const {data}=await supabaseClient.auth.getUser();
+ currentUser=data.user;
+ updateUserUI();
+}
+
+function updateUserUI(){
+ const label=document.getElementById("userLabel");
+ const btn=document.getElementById("loginButton");
+ if(currentUser){
+  label.textContent=currentUser.email;
+  btn.textContent="LOG OUT";
+  btn.onclick=logout;
+ }else{
+  label.textContent="";
+  btn.textContent="SIGN IN";
+  btn.onclick=openAuth;
+ }
+}
+
+async function logout(){
+ if(supabaseClient)await supabaseClient.auth.signOut();
+ currentUser=null;
+ updateUserUI();
+}
+
+async function checkout(){
+ if(!cart.length){alert("Your bag is empty.");return;}
+ if(!currentUser){
+  closePanels();
+  openAuth();
+  document.getElementById("authMessage").textContent="Please sign in before checkout.";
+  return;
+ }
+ alert("Your cart is ready. Online payment and order placement are not connected yet.");
+}
+
+function subscribe(event){
+ event.preventDefault();
+ const email=document.getElementById("newsletterEmail").value;
+ document.getElementById("newsletterMessage").textContent=
+  "Thanks! Newsletter signup for "+email+" is currently a demo.";
+ event.target.reset();
+}
+
+/* Scroll reveal */
+const observer=new IntersectionObserver(entries=>{
+ entries.forEach(entry=>{
+  if(entry.isIntersecting){
+   entry.target.classList.add("visible");
+   observer.unobserve(entry.target);
+  }
+ });
+},{threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>observer.observe(el));
+
+/* Subtle 3D hero tilt */
+const heroTilt=document.getElementById("heroTilt");
+heroTilt.addEventListener("mousemove",e=>{
+ if(innerWidth<700)return;
+ const r=heroTilt.getBoundingClientRect();
+ const x=(e.clientX-r.left)/r.width-.5;
+ const y=(e.clientY-r.top)/r.height-.5;
+ heroTilt.querySelector("img").style.transform=
+  `rotateY(${x*7}deg) rotateX(${-y*7}deg) scale(1.015)`;
+});
+heroTilt.addEventListener("mouseleave",()=>{
+ heroTilt.querySelector("img").style.transform="rotateY(0) rotateX(0) scale(1)";
+});
+
+renderProducts();
+renderCart();
+switchAuth("login");
+getUser();
+
+if(supabaseClient){
+ supabaseClient.auth.onAuthStateChange((_event,session)=>{
+  currentUser=session?.user||null;
+  updateUserUI();
+ });
+}
+</script>
+</body>
+</html>
