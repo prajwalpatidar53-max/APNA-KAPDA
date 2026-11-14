@@ -1,16 +1,90 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, LogOut, Package, Save, UserCheck } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Ban,
+  CheckCircle2,
+  LogOut,
+  Package,
+  Save,
+  UserCheck,
+  X,
+} from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { formatINR } from '../data/catalog';
-import { fetchCustomerOrders, updateUserProfile } from '../services/storeService';
-import type { Order, ShippingAddress, UserProfile } from '../types';
+import {
+  cancelCustomerOrder,
+  fetchCustomerOrders,
+  updateUserProfile,
+} from '../services/storeService';
+import type {
+  Order,
+  OrderStatus,
+  ShippingAddress,
+  UserProfile,
+} from '../types';
 
 interface AccountViewProps {
   user: SupabaseUser | null;
   profile: UserProfile | null;
   onBack: () => void;
   onProfileUpdated: () => void;
+  onOrderCancelled?: () => void;
   onLogout: () => void;
+}
+
+const CUSTOMER_CANCELLABLE_STATUSES: OrderStatus[] = [
+  'pending',
+  'confirmed',
+  'packed',
+];
+
+const QUICK_CANCEL_REASONS = [
+  'Ordered by mistake',
+  'Need a different size',
+  'Delivery taking too long',
+  'Changed my mind',
+];
+
+function isCustomerCancellable(order: Order): boolean {
+  return CUSTOMER_CANCELLABLE_STATUSES.includes(order.order_status);
+}
+
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return '—';
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function getCustomerPaymentLabel(order: Order): string {
+  if (order.order_status === 'cancelled') {
+    if (
+      order.payment_status === 'refund_pending' ||
+      order.refund_status === 'pending'
+    ) {
+      return 'Refund Pending (Awaiting payment provider confirmation)';
+    }
+    if (
+      order.payment_status === 'refunded' ||
+      order.refund_status === 'processed'
+    ) {
+      return 'Refund Processed';
+    }
+    if (order.payment_method === 'cod') {
+      return 'COD Cancelled (No payment collected)';
+    }
+    return 'Online Reservation Cancelled (No charge captured)';
+  }
+  return order.payment_status.replace('_', ' ');
 }
 
 export function AccountView({
@@ -18,6 +92,7 @@ export function AccountView({
   profile,
   onBack,
   onProfileUpdated,
+  onOrderCancelled,
   onLogout,
 }: AccountViewProps) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
@@ -34,6 +109,15 @@ export function AccountView({
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelModalError, setCancelModalError] = useState('');
+  const [orderNotice, setOrderNotice] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
@@ -48,14 +132,17 @@ export function AccountView({
     }
   }, [profile]);
 
-  useEffect(() => {
+  const loadOrders = useCallback(async () => {
     if (!user) return;
     setLoadingOrders(true);
-    fetchCustomerOrders(user.id).then((res) => {
-      setOrders(res.orders);
-      setLoadingOrders(false);
-    });
+    const res = await fetchCustomerOrders(user.id);
+    setOrders(res.orders);
+    setLoadingOrders(false);
   }, [user]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
 
   if (!user) return null;
 
@@ -75,6 +162,44 @@ export function AccountView({
     }
     setSaveMessage('Profile saved.');
     onProfileUpdated();
+  };
+
+  const openCancelDialog = (order: Order) => {
+    setCancelTarget(order);
+    setCancelReason('');
+    setCancelModalError('');
+  };
+
+  const handleConfirmCancel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancelTarget || cancelling) return;
+
+    setCancelling(true);
+    setCancelModalError('');
+    setOrderNotice(null);
+
+    const res = await cancelCustomerOrder(cancelTarget.id, cancelReason);
+    setCancelling(false);
+
+    if (res.error) {
+      setCancelModalError(res.error);
+      return;
+    }
+
+    const cancelledOrderNumber = cancelTarget.order_number;
+    const wasPaidOnline = cancelTarget.payment_status === 'paid';
+    setCancelTarget(null);
+    setCancelReason('');
+
+    await loadOrders();
+    onOrderCancelled?.();
+
+    setOrderNotice({
+      type: 'success',
+      text: wasPaidOnline
+        ? `Order ${cancelledOrderNumber} has been cancelled. Your refund is marked as Pending until confirmed by our payment provider.`
+        : `Order ${cancelledOrderNumber} has been cancelled successfully.`,
+    });
   };
 
   return (
@@ -202,6 +327,24 @@ export function AccountView({
             Order History
           </h2>
 
+          {orderNotice && (
+            <div
+              role="status"
+              className={`mb-5 p-3.5 border text-xs flex items-start gap-2.5 ${
+                orderNotice.type === 'error'
+                  ? 'bg-[#fdf2f0] border-[#e6c2b8] text-[#9a3b26]'
+                  : 'bg-[#f5f2eb] border-[#c8bfae] text-[#211f1b]'
+              }`}
+            >
+              {orderNotice.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#9a3b26]" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#9a6746]" />
+              )}
+              <span className="leading-relaxed">{orderNotice.text}</span>
+            </div>
+          )}
+
           {loadingOrders ? (
             <p className="text-xs text-[#817b70]">Loading your orders...</p>
           ) : orders.length === 0 ? (
@@ -222,64 +365,231 @@ export function AccountView({
             </div>
           ) : (
             <div className="space-y-4">
-              {orders.map((order) => (
-                <div
-                  key={order.id}
-                  className="border border-[#e5dfd3] p-5 bg-[#f5f2eb]/30"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#e5dfd3]">
-                    <div>
-                      <span className="text-xs font-bold text-[#211f1b] tabular-nums">
-                        {order.order_number}
-                      </span>
-                      <span className="mx-2 text-[#817b70]">&middot;</span>
-                      <span className="text-[11px] text-[#817b70] tabular-nums">
-                        {new Date(order.created_at).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
+              {orders.map((order) => {
+                const canCancel = isCustomerCancellable(order);
+                const isCancelled = order.order_status === 'cancelled';
 
-                    <div className="text-[11px] uppercase tracking-wider font-semibold text-[#9a6746]">
-                      {order.order_status} &middot;{' '}
-                      {order.payment_status.replace('_', ' ')}
-                    </div>
-                  </div>
-
-                  <div className="py-3 space-y-2 text-xs">
-                    {order.order_items?.map((item, i) => (
-                      <div
-                        key={item.id || i}
-                        className="flex items-center justify-between text-[#5f594f] tabular-nums"
-                      >
-                        <span>
-                          {item.product_name} (Size {item.selected_size}) &times;{' '}
-                          {item.quantity}
+                return (
+                  <div
+                    key={order.id}
+                    className={`border p-5 ${
+                      isCancelled
+                        ? 'border-[#dfd5c5] bg-[#f5f2eb]/55'
+                        : 'border-[#e5dfd3] bg-[#f5f2eb]/30'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#e5dfd3]">
+                      <div>
+                        <span className="text-xs font-bold text-[#211f1b] tabular-nums">
+                          {order.order_number}
                         </span>
-                        <span className="font-medium text-[#211f1b]">
-                          {formatINR(item.unit_price_inr * item.quantity)}
+                        <span className="mx-2 text-[#817b70]">&middot;</span>
+                        <span className="text-[11px] text-[#817b70] tabular-nums">
+                          {new Date(order.created_at).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
                         </span>
                       </div>
-                    ))}
-                  </div>
 
-                  <div className="pt-3 border-t border-[#e5dfd3] flex items-center justify-between text-xs tabular-nums">
-                    <span className="text-[#817b70]">
-                      Deliver to: {order.shipping_address.city},{' '}
-                      {order.shipping_address.pincode}
-                    </span>
-                    <span className="font-bold text-[#211f1b]">
-                      Total: {formatINR(order.total_inr)}
-                    </span>
+                      <div
+                        className={`text-[11px] uppercase tracking-wider font-semibold ${
+                          isCancelled ? 'text-[#9a3b26]' : 'text-[#9a6746]'
+                        }`}
+                      >
+                        {order.order_status} &middot;{' '}
+                        {order.payment_status.replace('_', ' ')}
+                      </div>
+                    </div>
+
+                    <div className="py-3 space-y-2 text-xs">
+                      {order.order_items?.map((item, i) => (
+                        <div
+                          key={item.id || i}
+                          className="flex items-center justify-between text-[#5f594f] tabular-nums"
+                        >
+                          <span>
+                            {item.product_name} (Size {item.selected_size}) &times;{' '}
+                            {item.quantity}
+                          </span>
+                          <span className="font-medium text-[#211f1b]">
+                            {formatINR(item.unit_price_inr * item.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {isCancelled && (
+                      <div className="my-2.5 p-3.5 bg-[#fffdf8] border border-[#e5dfd3] text-xs space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[10px] tracking-[0.16em] uppercase font-bold text-[#9a3b26]">
+                            Order Cancelled
+                            {order.cancelled_by
+                              ? ` · By ${
+                                  order.cancelled_by === 'admin'
+                                    ? 'Store Admin'
+                                    : 'You'
+                                }`
+                              : ''}
+                          </span>
+                          {order.cancelled_at && (
+                            <span className="text-[11px] text-[#817b70] tabular-nums">
+                              {formatDateTime(order.cancelled_at)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#5f594f]">
+                          {getCustomerPaymentLabel(order)}
+                        </p>
+                        {order.cancellation_reason && (
+                          <p className="text-[11px] text-[#5f594f]">
+                            Reason: <span className="text-[#211f1b]">{order.cancellation_reason}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-[#e5dfd3] flex flex-wrap items-center justify-between gap-3 text-xs tabular-nums">
+                      <span className="text-[#817b70]">
+                        Deliver to: {order.shipping_address.city},{' '}
+                        {order.shipping_address.pincode}
+                      </span>
+
+                      <div className="flex items-center gap-3 ml-auto">
+                        <span className="font-bold text-[#211f1b]">
+                          Total: {formatINR(order.total_inr)}
+                        </span>
+
+                        {canCancel && (
+                          <button
+                            type="button"
+                            onClick={() => openCancelDialog(order)}
+                            className="inline-flex items-center gap-1.5 border border-[#9a3b26] px-3 py-1.5 text-[10px] tracking-[0.14em] uppercase font-semibold text-[#9a3b26] hover:bg-[#9a3b26] hover:text-white transition-colors cursor-pointer"
+                          >
+                            <Ban className="w-3 h-3" />
+                            <span>Cancel Order</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
       </div>
+
+      {/* Customer Cancellation Confirmation Modal */}
+      {cancelTarget && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !cancelling && setCancelTarget(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm order cancellation"
+        >
+          <div
+            className="relative w-full max-w-[460px] bg-[#fffdf8] border border-[#e5dfd3] p-6 sm:p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => setCancelTarget(null)}
+              aria-label="Close cancellation dialog"
+              className="absolute right-4 top-4 p-1.5 text-[#817b70] hover:text-[#211f1b] cursor-pointer disabled:opacity-40"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <p className="text-[10px] tracking-[0.24em] uppercase text-[#9a6746] font-bold">
+              Order Cancellation
+            </p>
+            <h3 className="font-serif-display text-2xl sm:text-3xl text-[#211f1b] mt-2">
+              Cancel order <span className="tabular-nums">{cancelTarget.order_number}</span>?
+            </h3>
+            <p className="text-xs text-[#5f594f] mt-2 leading-relaxed">
+              This action cannot be undone. Reserved stock for{' '}
+              <strong className="text-[#211f1b]">
+                {cancelTarget.order_items?.reduce((s, i) => s + i.quantity, 0) || 1}{' '}
+                item(s)
+              </strong>{' '}
+              will be returned to our inventory immediately.
+            </p>
+
+            <div className="mt-4 p-3.5 bg-[#f5f2eb] border border-[#e5dfd3] text-xs text-[#5f594f] space-y-1">
+              <p className="font-semibold text-[#211f1b]">
+                Total Amount: <span className="tabular-nums">{formatINR(cancelTarget.total_inr)}</span>
+              </p>
+              <p className="text-[11px]">
+                {cancelTarget.payment_status === 'paid'
+                  ? 'Paid Online: Your refund status will be marked as Pending until confirmed by the payment provider.'
+                  : cancelTarget.payment_method === 'cod'
+                    ? 'Cash on Delivery: No payment was collected; your order will simply be cancelled.'
+                    : 'Online Payment Pending: Your reservation will be cancelled before any payment is captured.'}
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmCancel} className="mt-5 space-y-4">
+              <div>
+                <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-2">
+                  Reason for cancellation (Optional)
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {QUICK_CANCEL_REASONS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCancelReason(preset)}
+                      className={`px-2.5 py-1 text-[11px] border transition-colors cursor-pointer ${
+                        cancelReason === preset
+                          ? 'bg-[#24231f] text-white border-[#24231f]'
+                          : 'bg-[#fffdf8] text-[#5f594f] border-[#e5dfd3] hover:border-[#24231f]'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Share an optional note..."
+                  className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                />
+              </div>
+
+              {cancelModalError && (
+                <div className="p-3 bg-[#fdf2f0] border border-[#e6c2b8] text-xs text-[#9a3b26]">
+                  {cancelModalError}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={() => setCancelTarget(null)}
+                  className="flex-1 py-3 px-4 border border-[#24231f] text-[#211f1b] text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#f5f2eb] transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelling}
+                  className="flex-1 py-3 px-4 bg-[#9a3b26] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#7d2e1d] transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {cancelling ? 'Cancelling...' : 'Confirm Cancellation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

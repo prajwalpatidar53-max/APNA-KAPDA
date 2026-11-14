@@ -382,6 +382,38 @@ export async function fetchCustomerOrders(
   return { orders: normalizedOrders };
 }
 
+export async function cancelCustomerOrder(
+  orderId: string,
+  reason?: string
+): Promise<{ order?: Order; restoredUnits?: number; error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const { data, error } = await supabase.rpc('cancel_order', {
+    p_order_id: orderId,
+    p_reason: reason?.trim() || null,
+    p_actor: 'customer',
+  });
+
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      return {
+        error:
+          'Order cancellation function is not installed in Supabase yet. Run supabase/order_cancellation_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logDbError('cancelCustomerOrder', 'rpc/cancel_order', error);
+    return { error: error.message };
+  }
+
+  const payload = data as { order?: Order; restored_units?: number } | null;
+  return {
+    order: payload?.order,
+    restoredUnits: payload?.restored_units ?? 0,
+  };
+}
+
 export async function fetchAllOrdersAdmin(): Promise<{
   orders: Order[];
   error?: string;

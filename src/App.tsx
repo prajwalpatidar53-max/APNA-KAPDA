@@ -284,6 +284,7 @@ export default function App() {
             profile={profile}
             onBack={() => navigateView('storefront', 'shop')}
             onProfileUpdated={() => user && loadProfile(user.id)}
+            onOrderCancelled={loadCatalog}
             onLogout={handleLogout}
           />
         )}

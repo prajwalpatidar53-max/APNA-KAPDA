@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
+  Ban,
   Check,
+  CheckCircle2,
   MapPin,
   PackageCheck,
   Search,
@@ -9,7 +12,7 @@ import {
 } from 'lucide-react';
 import { formatINR } from '../data/catalog';
 import type { Order, OrderStatus, PaymentStatus } from '../types';
-import { updateAdminOrder } from './adminService';
+import { cancelOrderAdmin, updateAdminOrder } from './adminService';
 
 interface AdminOrdersProps {
   orders: Order[];
@@ -28,15 +31,37 @@ const ORDER_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
+const FULFILLMENT_STATUSES: OrderStatus[] = [
+  'pending',
+  'confirmed',
+  'packed',
+  'shipped',
+  'delivered',
+];
+
+const ADMIN_CANCELLABLE_STATUSES: OrderStatus[] = [
+  'pending',
+  'confirmed',
+  'packed',
+  'shipped',
+];
+
 const PAYMENT_STATUSES: PaymentStatus[] = [
   'cod_due',
   'awaiting_payment',
   'paid',
+  'refund_pending',
   'failed',
   'refunded',
+  'cancelled',
 ];
 
-function formatDateTime(iso: string): string {
+function isAdminCancellable(order: Order): boolean {
+  return ADMIN_CANCELLABLE_STATUSES.includes(order.order_status);
+}
+
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return '—';
   try {
     return new Intl.DateTimeFormat('en-IN', {
       day: '2-digit',
@@ -69,13 +94,35 @@ function orderStatusStyle(status: OrderStatus): string {
 function paymentStatusStyle(status: PaymentStatus): string {
   switch (status) {
     case 'paid':
-      return 'border-[#2b6345] bg-[#ecfdf5] text-[#2b6345]';
-    case 'failed':
     case 'refunded':
+      return 'border-[#2b6345] bg-[#ecfdf5] text-[#2b6345]';
+    case 'refund_pending':
+      return 'border-[#fde68a] bg-[#fffbeb] text-[#92400e]';
+    case 'failed':
+    case 'cancelled':
       return 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]';
     default:
       return 'border-[#e5dfd3] bg-[#f5f2eb] text-[#5f594f]';
   }
+}
+
+function getAdminRefundSummary(order: Order): string {
+  if (
+    order.payment_status === 'refund_pending' ||
+    order.refund_status === 'pending'
+  ) {
+    return 'Online payment was captured — Refund is Pending until confirmed by the payment provider.';
+  }
+  if (
+    order.payment_status === 'refunded' ||
+    order.refund_status === 'processed'
+  ) {
+    return 'Refund processed and confirmed.';
+  }
+  if (order.payment_method === 'cod') {
+    return 'Cash on Delivery — Order cancelled without creating a refund.';
+  }
+  return 'Online payment was still awaiting capture — Reservation cancelled with no refund needed.';
 }
 
 export function AdminOrders({
@@ -94,6 +141,12 @@ export function AdminOrders({
   const [editPaymentStatus, setEditPaymentStatus] = useState<PaymentStatus>('cod_due');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [listNotice, setListNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   useEffect(() => {
     if (initialOrderId) {
@@ -104,6 +157,16 @@ export function AdminOrders({
       onClearInitialOrder?.();
     }
   }, [initialOrderId, orders, onClearInitialOrder]);
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const latest = orders.find((o) => o.id === selectedOrder.id);
+    if (latest) {
+      setSelectedOrder(latest);
+      setEditOrderStatus(latest.order_status);
+      setEditPaymentStatus(latest.payment_status);
+    }
+  }, [orders, selectedOrder?.id]);
 
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -129,16 +192,25 @@ export function AdminOrders({
     setFeedback(null);
   };
 
+  const openCancelDialog = (order: Order) => {
+    setCancelTarget(order);
+    setCancelReason('');
+    setCancelError('');
+  };
+
   const handleSaveOrderUpdate = async () => {
     if (!selectedOrder) return;
     setSaving(true);
     setFeedback(null);
 
-    const res = await updateAdminOrder(selectedOrder.id, {
-      order_status: editOrderStatus,
+    const payload: { order_status?: OrderStatus; payment_status?: PaymentStatus } = {
       payment_status: editPaymentStatus,
-    });
+    };
+    if (selectedOrder.order_status !== 'cancelled') {
+      payload.order_status = editOrderStatus;
+    }
 
+    const res = await updateAdminOrder(selectedOrder.id, payload);
     setSaving(false);
 
     if (res.error) {
@@ -146,16 +218,46 @@ export function AdminOrders({
       return;
     }
 
-    setSelectedOrder({
-      ...selectedOrder,
-      order_status: editOrderStatus,
-      payment_status: editPaymentStatus,
-    });
     setFeedback({
       type: 'ok',
       text: `Saved status updates for ${selectedOrder.order_number}.`,
     });
     await onRefresh();
+  };
+
+  const handleConfirmAdminCancel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancelTarget || cancelling) return;
+
+    setCancelling(true);
+    setCancelError('');
+    setFeedback(null);
+    setListNotice(null);
+
+    const res = await cancelOrderAdmin(cancelTarget.id, cancelReason);
+    setCancelling(false);
+
+    if (res.error) {
+      setCancelError(res.error);
+      return;
+    }
+
+    const cancelledNum = cancelTarget.order_number;
+    const restoredCount = res.restoredUnits ?? 0;
+    const wasPaid = cancelTarget.payment_status === 'paid';
+
+    setCancelTarget(null);
+    setCancelReason('');
+    await onRefresh();
+
+    const message = wasPaid
+      ? `Order ${cancelledNum} cancelled (restored ${restoredCount} unit(s)). Payment marked Refund Pending.`
+      : `Order ${cancelledNum} cancelled (restored ${restoredCount} unit(s) to stock).`;
+
+    setListNotice({ type: 'ok', text: message });
+    if (selectedOrder && selectedOrder.id === cancelTarget.id) {
+      setFeedback({ type: 'ok', text: message });
+    }
   };
 
   return (
@@ -212,6 +314,24 @@ export function AdminOrders({
           {orders.length} orders
         </p>
       </div>
+
+      {listNotice && (
+        <div
+          role="status"
+          className={`p-3.5 border text-xs flex items-center gap-2.5 ${
+            listNotice.type === 'err'
+              ? 'bg-[#fef2f2] border-[#fecaca] text-[#b91c1c]'
+              : 'bg-[#ecfdf5] border-[#a7f3d0] text-[#2b6345]'
+          }`}
+        >
+          {listNotice.type === 'err' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          )}
+          <span>{listNotice.text}</span>
+        </div>
+      )}
 
       {/* Orders Table */}
       <div className="bg-[#fffdf8] border border-[#e5dfd3] overflow-hidden">
@@ -289,13 +409,20 @@ export function AdminOrders({
                         </div>
                       </td>
                       <td className="py-3.5 px-3 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-1 text-[10px] tracking-[0.12em] uppercase font-semibold border ${orderStatusStyle(
-                            order.order_status
-                          )}`}
-                        >
-                          {order.order_status}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className={`px-2.5 py-1 text-[10px] tracking-[0.12em] uppercase font-semibold border ${orderStatusStyle(
+                              order.order_status
+                            )}`}
+                          >
+                            {order.order_status}
+                          </span>
+                          {order.order_status === 'cancelled' && order.cancelled_by && (
+                            <span className="text-[10px] text-[#817b70] capitalize">
+                              By {order.cancelled_by}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-right font-semibold text-[#211f1b] tabular-nums whitespace-nowrap">
                         {formatINR(order.total_inr)}
@@ -343,13 +470,53 @@ export function AdminOrders({
                 Placed on {formatDateTime(selectedOrder.created_at)}
               </p>
 
+              {/* Cancellation Audit Card (Shown when Cancelled) */}
+              {selectedOrder.order_status === 'cancelled' && (
+                <div className="bg-[#fef2f2] border border-[#fecaca] p-4 space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[10px] tracking-[0.16em] uppercase font-bold text-[#b91c1c]">
+                      Order Cancelled &middot; Initiated by{' '}
+                      {selectedOrder.cancelled_by === 'customer'
+                        ? 'Customer'
+                        : selectedOrder.cancelled_by === 'admin'
+                          ? 'Admin'
+                          : 'System'}
+                    </span>
+                    {selectedOrder.cancelled_at && (
+                      <span className="text-[11px] text-[#7f1d1d] tabular-nums">
+                        {formatDateTime(selectedOrder.cancelled_at)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[#7f1d1d]">
+                    {getAdminRefundSummary(selectedOrder)}
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#5f594f] pt-1">
+                    <span>
+                      Stock Restored:{' '}
+                      <strong className="text-[#211f1b]">
+                        {selectedOrder.stock_restored ? 'Yes' : 'Pending / N/A'}
+                      </strong>
+                    </span>
+                    <span>
+                      Reason:{' '}
+                      <strong className="text-[#211f1b]">
+                        {selectedOrder.cancellation_reason || 'No reason provided'}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Status Controls */}
               <div className="bg-[#f5f2eb] border border-[#e5dfd3] p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <PackageCheck className="w-4 h-4 text-[#9a6746]" />
-                  <h4 className="text-[11px] tracking-[0.16em] uppercase font-bold text-[#211f1b]">
-                    Update Fulfillment &amp; Payment Status
-                  </h4>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <PackageCheck className="w-4 h-4 text-[#9a6746]" />
+                    <h4 className="text-[11px] tracking-[0.16em] uppercase font-bold text-[#211f1b]">
+                      Update Fulfillment &amp; Payment Status
+                    </h4>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -357,19 +524,25 @@ export function AdminOrders({
                     <label className="block text-[10px] tracking-[0.14em] uppercase text-[#5f594f] mb-1">
                       Order Status
                     </label>
-                    <select
-                      value={editOrderStatus}
-                      onChange={(e) =>
-                        setEditOrderStatus(e.target.value as OrderStatus)
-                      }
-                      className="w-full px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] outline-none text-[#211f1b] capitalize"
-                    >
-                      {ORDER_STATUSES.map((s) => (
-                        <option key={s} value={s} className="capitalize">
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                    {selectedOrder.order_status === 'cancelled' ? (
+                      <div className="px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] text-[#b91c1c] font-semibold uppercase tracking-wider">
+                        Cancelled
+                      </div>
+                    ) : (
+                      <select
+                        value={editOrderStatus}
+                        onChange={(e) =>
+                          setEditOrderStatus(e.target.value as OrderStatus)
+                        }
+                        className="w-full px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] outline-none text-[#211f1b] capitalize"
+                      >
+                        {FULFILLMENT_STATUSES.map((s) => (
+                          <option key={s} value={s} className="capitalize">
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -404,15 +577,28 @@ export function AdminOrders({
                   </p>
                 )}
 
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={handleSaveOrderUpdate}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{saving ? 'Updating...' : 'Save Order Status'}</span>
-                </button>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleSaveOrderUpdate}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{saving ? 'Updating...' : 'Save Order Status'}</span>
+                  </button>
+
+                  {isAdminCancellable(selectedOrder) && (
+                    <button
+                      type="button"
+                      onClick={() => openCancelDialog(selectedOrder)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[#b91c1c] text-[#b91c1c] text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#b91c1c] hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                      <span>Cancel Order</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Customer & Shipping Address */}
@@ -535,6 +721,118 @@ export function AdminOrders({
               </div>
             </div>
           </aside>
+        </div>
+      )}
+
+      {/* Admin Cancellation Confirmation Modal */}
+      {cancelTarget && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4"
+          onClick={() => !cancelling && setCancelTarget(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm admin order cancellation"
+        >
+          <div
+            className="w-full max-w-lg bg-[#fffdf8] border border-[#e5dfd3] p-6 sm:p-7 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#e5dfd3]">
+              <div>
+                <p className="text-[10px] tracking-[0.2em] uppercase text-[#b91c1c] font-bold">
+                  Admin Order Cancellation
+                </p>
+                <h3 className="font-serif-display text-2xl text-[#211f1b] mt-1 tabular-nums">
+                  Cancel {cancelTarget.order_number}?
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => setCancelTarget(null)}
+                aria-label="Close modal"
+                className="p-1.5 text-[#817b70] hover:text-[#211f1b] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="p-3.5 bg-[#f5f2eb] border border-[#e5dfd3] space-y-1.5">
+                <p className="font-semibold text-[#211f1b]">
+                  Customer: {cancelTarget.customer_name} ({cancelTarget.customer_email})
+                </p>
+                <p className="text-[#5f594f] tabular-nums">
+                  Order Total: <strong className="text-[#211f1b]">{formatINR(cancelTarget.total_inr)}</strong> &middot;{' '}
+                  Current Status: <strong className="capitalize">{cancelTarget.order_status}</strong>
+                </p>
+                <p className="text-[11px] text-[#5f594f]">
+                  {cancelTarget.payment_status === 'paid'
+                    ? 'Payment Handling: Paid online — will be marked "refund_pending" until provider confirms.'
+                    : cancelTarget.payment_method === 'cod'
+                      ? 'Payment Handling: COD — order will be marked cancelled without creating a refund.'
+                      : 'Payment Handling: Pending online — reservation cancelled without refund.'}
+                </p>
+              </div>
+
+              <div className="border border-[#e5dfd3] p-3">
+                <p className="text-[10px] tracking-[0.14em] uppercase font-bold text-[#817b70] mb-1.5">
+                  Inventory to Restore Atomically
+                </p>
+                <ul className="space-y-1 text-[11px] text-[#211f1b] tabular-nums">
+                  {(cancelTarget.order_items ?? []).map((item, idx) => (
+                    <li key={item.id ?? idx} className="flex justify-between">
+                      <span>
+                        {item.product_name} (Size {item.selected_size})
+                      </span>
+                      <span className="font-semibold">+{item.quantity} unit(s)</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmAdminCancel} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1.5">
+                  Cancellation Reason (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={300}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="e.g. Out of stock verification, customer requested via WhatsApp/email..."
+                  className="w-full px-3.5 py-2.5 text-xs bg-[#f5f2eb]/60 border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+                />
+              </div>
+
+              {cancelError && (
+                <p className="text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] p-3">
+                  {cancelError}
+                </p>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={() => setCancelTarget(null)}
+                  className="px-5 py-2.5 border border-[#e5dfd3] text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] hover:text-[#211f1b] cursor-pointer disabled:opacity-50"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="submit"
+                  disabled={cancelling}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#b91c1c] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#991b1b] transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>{cancelling ? 'Cancelling...' : 'Confirm Order Cancellation'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

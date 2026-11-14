@@ -21,8 +21,16 @@ export type PaymentStatus =
   | 'cod_due'
   | 'awaiting_payment'
   | 'paid'
+  | 'refund_pending'
   | 'failed'
-  | 'refunded';
+  | 'refunded'
+  | 'cancelled';
+export type RefundStatus =
+  | 'none'
+  | 'not_required'
+  | 'pending'
+  | 'processed'
+  | 'failed';
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
@@ -45,6 +53,7 @@ export interface Product {
   sizes: string[];
   colors?: string[];
   stock_count: number;
+  size_stock?: Record<string, number>;
   image_url: string;
   gallery_images?: string[];
   is_active: boolean;
@@ -103,6 +112,12 @@ export interface Order {
   shipping_inr: number;
   total_inr: number;
   notes?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: 'customer' | 'admin' | null;
+  cancelled_by_user_id?: string | null;
+  cancellation_reason?: string | null;
+  stock_restored?: boolean;
+  refund_status?: RefundStatus;
   created_at: string;
   order_items?: OrderItem[];
 }
