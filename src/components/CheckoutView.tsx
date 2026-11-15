@@ -182,7 +182,7 @@ export function CheckoutView({
   const shippingFee =
     discountPreview && discountPreview.valid
       ? discountPreview.shipping_inr
-      : subtotal === 0 || discountedSubtotal >= FREE_SHIPPING_THRESHOLD_INR
+      : subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD_INR
         ? 0
         : STANDARD_SHIPPING_FEE_INR;
   const total =

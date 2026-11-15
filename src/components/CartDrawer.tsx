@@ -76,15 +76,14 @@ export function CartDrawer({
 
   const activeDiscount =
     discountPreview && discountPreview.valid ? discountPreview.discount_inr : 0;
-  const discountedSubtotal = Math.max(0, subtotal - activeDiscount);
 
   const remainingForFreeShipping = Math.max(
     0,
-    FREE_SHIPPING_THRESHOLD_INR - discountedSubtotal
+    FREE_SHIPPING_THRESHOLD_INR - subtotal
   );
   const shippingProgress = Math.min(
     100,
-    (discountedSubtotal / FREE_SHIPPING_THRESHOLD_INR) * 100
+    (subtotal / FREE_SHIPPING_THRESHOLD_INR) * 100
   );
 
   return (
