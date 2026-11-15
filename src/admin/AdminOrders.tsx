@@ -865,6 +865,18 @@ export function AdminOrders({
                   <span>Subtotal</span>
                   <span>{formatINR(selectedOrder.subtotal_inr)}</span>
                 </div>
+                {(selectedOrder.discount_inr ?? 0) > 0 && (
+                  <div className="flex justify-between text-[#2b6345] tabular-nums">
+                    <span>
+                      Discount (
+                      {selectedOrder.applied_coupon_code
+                        ? `Coupon ${selectedOrder.applied_coupon_code}`
+                        : selectedOrder.applied_offer_title || 'Offer'}
+                      )
+                    </span>
+                    <span>&minus;{formatINR(selectedOrder.discount_inr ?? 0)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[#5f594f] tabular-nums">
                   <span>Shipping</span>
                   <span>

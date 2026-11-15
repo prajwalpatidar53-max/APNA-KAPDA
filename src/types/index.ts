@@ -122,6 +122,63 @@ export interface OrderItem {
   created_at?: string;
 }
 
+export type OfferDiscountMode = 'automatic' | 'coupon';
+export type OfferDiscountType = 'percentage' | 'fixed';
+export type OfferAppliesTo = 'all' | 'products' | 'categories';
+export type StorefrontBannerDestinationType = 'shop' | 'category' | 'product' | 'url';
+
+export interface Offer {
+  id: string;
+  title: string;
+  description: string;
+  discount_mode: OfferDiscountMode;
+  coupon_code: string | null;
+  discount_type: OfferDiscountType;
+  discount_value: number;
+  min_cart_value_inr: number;
+  max_discount_inr: number | null;
+  applies_to: OfferAppliesTo;
+  product_ids: string[];
+  categories: string[];
+  total_usage_limit: number | null;
+  per_customer_usage_limit: number | null;
+  usage_count: number;
+  allow_stacking: boolean;
+  is_active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StorefrontBanner {
+  id: string;
+  banner_text: string;
+  offer_title: string;
+  cta_text: string;
+  destination_type: StorefrontBannerDestinationType;
+  destination_value: string;
+  is_active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DiscountPreviewResult {
+  valid: boolean;
+  message: string | null;
+  applied_offer_id: string | null;
+  applied_coupon_code: string | null;
+  applied_offer_title: string | null;
+  discount_mode: OfferDiscountMode | null;
+  discount_inr: number;
+  subtotal_inr: number;
+  shipping_inr: number;
+  total_inr: number;
+  stacking_policy: 'no_stacking';
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -135,6 +192,10 @@ export interface Order {
   order_status: OrderStatus;
   subtotal_inr: number;
   shipping_inr: number;
+  discount_inr?: number;
+  applied_offer_id?: string | null;
+  applied_coupon_code?: string | null;
+  applied_offer_title?: string | null;
   total_inr: number;
   notes?: string | null;
   cancelled_at?: string | null;
@@ -148,3 +209,4 @@ export interface Order {
   created_at: string;
   order_items?: OrderItem[];
 }
+

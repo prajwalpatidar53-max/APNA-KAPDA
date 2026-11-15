@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import { ArrowUpRight, Minus, Plus, X } from 'lucide-react';
 import {
   FREE_SHIPPING_THRESHOLD_INR,
   formatINR,
 } from '../data/catalog';
+import { previewCheckoutDiscount } from '../services/storeService';
 import { getAvailableStockForSize } from '../utils/inventory';
-import type { CartItem, Product } from '../types';
+import type { CartItem, DiscountPreviewResult, Product } from '../types';
 import { ResilientImage } from './ResilientImage';
 
 interface CartDrawerProps {
@@ -12,6 +14,7 @@ interface CartDrawerProps {
   onClose: () => void;
   cart: CartItem[];
   products: Product[];
+  appliedCouponCode?: string | null;
   onChangeQty: (productId: string, size: string, delta: number) => void;
   onRemoveItem: (productId: string, size: string) => void;
   onProceedToCheckout: () => void;
@@ -22,10 +25,14 @@ export function CartDrawer({
   onClose,
   cart,
   products,
+  appliedCouponCode,
   onChangeQty,
   onRemoveItem,
   onProceedToCheckout,
 }: CartDrawerProps) {
+  const [discountPreview, setDiscountPreview] =
+    useState<DiscountPreviewResult | null>(null);
+
   const itemsWithProduct = cart
     .map((item) => ({
       ...item,
@@ -38,8 +45,47 @@ export function CartDrawer({
     0
   );
 
-  const remainingForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD_INR - subtotal);
-  const shippingProgress = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD_INR) * 100);
+  const cartSignature = itemsWithProduct
+    .map((x) => `${x.product.id}:${x.qty}`)
+    .join('|');
+
+  useEffect(() => {
+    if (!open || itemsWithProduct.length === 0) {
+      setDiscountPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    void previewCheckoutDiscount({
+      items: itemsWithProduct.map((x) => ({
+        product_id: x.product.id,
+        quantity: x.qty,
+        unit_price_inr: x.product.price_inr,
+      })),
+      couponCode: appliedCouponCode,
+    }).then((res) => {
+      if (!cancelled) {
+        setDiscountPreview(res);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, cartSignature, appliedCouponCode]);
+
+  const activeDiscount =
+    discountPreview && discountPreview.valid ? discountPreview.discount_inr : 0;
+  const discountedSubtotal = Math.max(0, subtotal - activeDiscount);
+
+  const remainingForFreeShipping = Math.max(
+    0,
+    FREE_SHIPPING_THRESHOLD_INR - discountedSubtotal
+  );
+  const shippingProgress = Math.min(
+    100,
+    (discountedSubtotal / FREE_SHIPPING_THRESHOLD_INR) * 100
+  );
 
   return (
     <>
@@ -182,8 +228,18 @@ export function CartDrawer({
             <span>Subtotal</span>
             <span>{formatINR(subtotal)}</span>
           </div>
+          {activeDiscount > 0 && (
+            <div className="flex items-center justify-between text-xs text-[#2b6345] mt-1.5 tabular-nums">
+              <span>
+                {discountPreview?.applied_coupon_code
+                  ? `Coupon (${discountPreview.applied_coupon_code})`
+                  : discountPreview?.applied_offer_title || 'Offer Applied'}
+              </span>
+              <span className="font-semibold">&minus;{formatINR(activeDiscount)}</span>
+            </div>
+          )}
           <p className="text-[11px] text-[#817b70] mt-1.5">
-            Shipping calculated at checkout. Cash on Delivery (COD) available.
+            Coupons &amp; shipping calculated at checkout. Cash on Delivery (COD) available.
           </p>
           <button
             type="button"

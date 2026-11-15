@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Menu, ShoppingBag, User, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import type { AppView, UserProfile } from '../types';
+import type { AppView, StorefrontBanner, UserProfile } from '../types';
 
 interface NavbarProps {
   activeView: AppView;
@@ -11,6 +11,8 @@ interface NavbarProps {
   onOpenAuth: () => void;
   user: SupabaseUser | null;
   profile: UserProfile | null;
+  activeBanner?: StorefrontBanner | null;
+  onBannerCtaClick?: (banner: StorefrontBanner) => void;
 }
 
 export function Navbar({
@@ -21,6 +23,8 @@ export function Navbar({
   onOpenAuth,
   user,
   profile,
+  activeBanner,
+  onBannerCtaClick,
 }: NavbarProps) {
   const [showBanner, setShowBanner] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,9 +38,29 @@ export function Navbar({
     <div className="sticky top-0 z-50">
       {showBanner && (
         <div className="bg-[#24231f] text-[#eee6d8] h-8 px-4 flex items-center justify-center relative text-[10px] tracking-[0.18em] uppercase">
-          <span className="truncate pr-6">
-            Free shipping on orders above ₹1,499 &nbsp;·&nbsp; Made for every you
-          </span>
+          {activeBanner ? (
+            <div className="truncate pr-6 flex items-center gap-2">
+              {activeBanner.offer_title && (
+                <span className="text-[#d6b38d] font-bold">
+                  {activeBanner.offer_title} &middot;
+                </span>
+              )}
+              <span className="truncate">{activeBanner.banner_text}</span>
+              {activeBanner.cta_text && (
+                <button
+                  type="button"
+                  onClick={() => onBannerCtaClick?.(activeBanner)}
+                  className="underline underline-offset-4 text-[#fffdf8] hover:text-[#d6b38d] font-semibold shrink-0 cursor-pointer"
+                >
+                  {activeBanner.cta_text}
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="truncate pr-6">
+              Free shipping on orders above ₹1,499 &nbsp;·&nbsp; Made for every you
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setShowBanner(false)}

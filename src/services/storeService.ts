@@ -5,6 +5,7 @@ import {
   resolveProductImageUrl,
 } from '../utils/imageUrl';
 import type {
+  DiscountPreviewResult,
   Order,
   OrderItem,
   OrderStatus,
@@ -12,6 +13,7 @@ import type {
   PaymentStatus,
   Product,
   ShippingAddress,
+  StorefrontBanner,
   UserProfile,
 } from '../types';
 
@@ -297,6 +299,138 @@ export async function updateUserProfile(
   return {};
 }
 
+export async function fetchActiveStorefrontBanner(): Promise<{
+  banner: StorefrontBanner | null;
+  error?: string;
+}> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { banner: null };
+  }
+
+  const { data, error } = await supabase
+    .from('storefront_banners')
+    .select('*')
+    .eq('is_active', true)
+    .order('updated_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return { banner: null };
+    }
+    logDbError('fetchActiveStorefrontBanner', 'storefront_banners', error);
+    return { banner: null, error: error.message };
+  }
+
+  const nowMs = Date.now();
+  const activeRow = ((data ?? []) as Record<string, unknown>[]).find((row) => {
+    const startOk = !row.starts_at || new Date(String(row.starts_at)).getTime() <= nowMs;
+    const endOk = !row.expires_at || new Date(String(row.expires_at)).getTime() >= nowMs;
+    return startOk && endOk;
+  });
+
+  if (!activeRow) return { banner: null };
+
+  const destType = String(activeRow.destination_type ?? 'shop');
+  return {
+    banner: {
+      id: String(activeRow.id ?? ''),
+      offer_title: String(activeRow.offer_title ?? ''),
+      banner_text: String(activeRow.banner_text ?? ''),
+      cta_text: String(activeRow.cta_text ?? 'Shop Now'),
+      destination_type:
+        destType === 'category' || destType === 'product' || destType === 'url'
+          ? destType
+          : 'shop',
+      destination_value: String(activeRow.destination_value ?? ''),
+      is_active: Boolean(activeRow.is_active),
+      starts_at: activeRow.starts_at ? String(activeRow.starts_at) : null,
+      expires_at: activeRow.expires_at ? String(activeRow.expires_at) : null,
+      created_at: activeRow.created_at ? String(activeRow.created_at) : undefined,
+      updated_at: activeRow.updated_at ? String(activeRow.updated_at) : undefined,
+    },
+  };
+}
+
+export async function previewCheckoutDiscount(params: {
+  items: { product_id: string; quantity: number; unit_price_inr?: number }[];
+  couponCode?: string | null;
+}): Promise<DiscountPreviewResult> {
+  const localSubtotal = params.items.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.unit_price_inr ?? 0)) * item.quantity,
+    0
+  );
+  const localShipping = localSubtotal === 0 || localSubtotal >= 1499 ? 0 : 99;
+  const fallbackBase: DiscountPreviewResult = {
+    valid: !params.couponCode?.trim(),
+    message: null,
+    applied_offer_id: null,
+    applied_coupon_code: null,
+    applied_offer_title: null,
+    discount_mode: null,
+    discount_inr: 0,
+    subtotal_inr: localSubtotal,
+    shipping_inr: localShipping,
+    total_inr: localSubtotal + localShipping,
+    stacking_policy: 'no_stacking',
+  };
+
+  if (!supabase || !isSupabaseConfigured || params.items.length === 0) {
+    return fallbackBase;
+  }
+
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  const rpcItems = params.items.map((item) => ({
+    product_uuid: uuidRegex.test(item.product_id) ? item.product_id : null,
+    product_id: item.product_id,
+    quantity: item.quantity,
+  }));
+
+  const normalizedCode = params.couponCode?.trim().toUpperCase() || null;
+
+  const { data, error } = await supabase.rpc('preview_checkout_discount', {
+    p_items: rpcItems,
+    p_coupon_code: normalizedCode,
+  });
+
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      return {
+        ...fallbackBase,
+        valid: !normalizedCode,
+        message: normalizedCode
+          ? 'Coupon validation requires running supabase/offers_migration.sql in Supabase SQL Editor.'
+          : null,
+      };
+    }
+    logDbError('previewCheckoutDiscount', 'rpc/preview_checkout_discount', error);
+    return {
+      ...fallbackBase,
+      valid: false,
+      message: error.message || 'Unable to verify discount right now.',
+    };
+  }
+
+  const res = data as Partial<DiscountPreviewResult> | null;
+  if (!res) return fallbackBase;
+
+  return {
+    valid: Boolean(res.valid),
+    message: res.message ?? null,
+    applied_offer_id: res.applied_offer_id ?? null,
+    applied_coupon_code: res.applied_coupon_code ?? null,
+    applied_offer_title: res.applied_offer_title ?? null,
+    discount_mode: res.discount_mode ?? null,
+    discount_inr: Number(res.discount_inr ?? 0),
+    subtotal_inr: Number(res.subtotal_inr ?? localSubtotal),
+    shipping_inr: Number(res.shipping_inr ?? localShipping),
+    total_inr: Number(res.total_inr ?? localSubtotal + localShipping),
+    stacking_policy: 'no_stacking',
+  };
+}
+
 export async function createOrder(params: {
   userId: string;
   customerName: string;
@@ -307,6 +441,8 @@ export async function createOrder(params: {
   subtotalInr: number;
   shippingInr: number;
   totalInr: number;
+  couponCode?: string | null;
+  discountInr?: number;
   notes?: string;
   idempotencyKey?: string;
   items: OrderItem[];
@@ -367,16 +503,40 @@ export async function createOrder(params: {
     p_items: rpcItems,
   };
 
+  const normalizedCoupon = params.couponCode?.trim().toUpperCase() || null;
+  const expectedDiscount = Math.max(0, Math.round(Number(params.discountInr ?? 0)));
+
   let { data: atomicData, error: atomicError } = await supabase.rpc(
     'create_order_atomic',
     {
       ...baseRpcArgs,
       p_idempotency_key: params.idempotencyKey?.trim() || null,
+      p_coupon_code: normalizedCoupon,
+      p_discount_inr: expectedDiscount,
     }
   );
 
+  // Backward-compatible fallback ONLY when no coupon/discount was requested and DB still runs 12-arg create_order_atomic
+  if (
+    atomicError?.code === 'PGRST202' &&
+    (atomicError.message.includes('p_coupon_code') ||
+      atomicError.message.includes('p_discount_inr'))
+  ) {
+    if (normalizedCoupon || expectedDiscount > 0) {
+      return {
+        error:
+          'Offers & coupon checkout requires running supabase/offers_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    const twelveArgCall = await supabase.rpc('create_order_atomic', {
+      ...baseRpcArgs,
+      p_idempotency_key: params.idempotencyKey?.trim() || null,
+    });
+    atomicData = twelveArgCall.data;
+    atomicError = twelveArgCall.error;
+  }
+
   // Backward-compatible fallback if Supabase still has the 11-arg create_order_atomic signature
-  // before the updated SQL migration is executed manually.
   if (
     atomicError?.code === 'PGRST202' &&
     atomicError.message.includes('p_idempotency_key')

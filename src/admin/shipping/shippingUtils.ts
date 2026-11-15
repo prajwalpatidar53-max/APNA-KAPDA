@@ -18,6 +18,7 @@ export interface ShippingFiltersState {
   orderStatus: 'default_dispatch' | 'all' | OrderStatus;
   includeCancelled: boolean;
   includeDelivered: boolean;
+  paymentMethod: 'all' | 'cod' | 'online_pending';
   paymentStatus: 'all' | PaymentStatus;
   orderIdQuery: string;
   customerQuery: string;
@@ -60,6 +61,7 @@ export const DEFAULT_SHIPPING_FILTERS: ShippingFiltersState = {
   orderStatus: 'default_dispatch',
   includeCancelled: false,
   includeDelivered: false,
+  paymentMethod: 'all',
   paymentStatus: 'all',
   orderIdQuery: '',
   customerQuery: '',
@@ -250,6 +252,13 @@ export function filterShippingOrders(
       if (order.order_status !== filters.orderStatus) {
         return false;
       }
+    }
+
+    if (
+      filters.paymentMethod !== 'all' &&
+      order.payment_method !== filters.paymentMethod
+    ) {
+      return false;
     }
 
     if (

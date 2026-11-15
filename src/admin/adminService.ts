@@ -6,10 +6,16 @@ import {
   resolveProductImageUrl,
 } from '../utils/imageUrl';
 import type {
+  Offer,
+  OfferAppliesTo,
+  OfferDiscountMode,
+  OfferDiscountType,
   Order,
   OrderStatus,
   PaymentStatus,
   Product,
+  StorefrontBanner,
+  StorefrontBannerDestinationType,
   UserProfile,
 } from '../types';
 
@@ -796,5 +802,426 @@ export async function updateAdminOrderDelivery(
   }
   return {};
 }
+
+// ============================================================================
+// OFFERS & COUPONS ADMIN CRUD
+// ============================================================================
+export interface SaveAdminOfferInput {
+  id?: string;
+  title: string;
+  description: string;
+  discount_mode: OfferDiscountMode;
+  coupon_code: string | null;
+  discount_type: OfferDiscountType;
+  discount_value: number;
+  min_cart_value_inr: number;
+  max_discount_inr: number | null;
+  applies_to: OfferAppliesTo;
+  product_ids: string[];
+  categories: string[];
+  total_usage_limit: number | null;
+  per_customer_usage_limit: number | null;
+  allow_stacking?: boolean;
+  is_active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+}
+
+function mapOfferRow(row: Record<string, unknown>): Offer {
+  return {
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    description: String(row.description ?? ''),
+    discount_mode: row.discount_mode === 'automatic' ? 'automatic' : 'coupon',
+    coupon_code: row.coupon_code ? String(row.coupon_code) : null,
+    discount_type: row.discount_type === 'fixed' ? 'fixed' : 'percentage',
+    discount_value: Number(row.discount_value ?? 0),
+    min_cart_value_inr: Number(row.min_cart_value_inr ?? 0),
+    max_discount_inr:
+      row.max_discount_inr !== null && row.max_discount_inr !== undefined
+        ? Number(row.max_discount_inr)
+        : null,
+    applies_to:
+      row.applies_to === 'products' || row.applies_to === 'categories'
+        ? row.applies_to
+        : 'all',
+    product_ids: Array.isArray(row.product_ids) ? row.product_ids.map(String) : [],
+    categories: Array.isArray(row.categories) ? row.categories.map(String) : [],
+    total_usage_limit:
+      row.total_usage_limit !== null && row.total_usage_limit !== undefined
+        ? Number(row.total_usage_limit)
+        : null,
+    per_customer_usage_limit:
+      row.per_customer_usage_limit !== null && row.per_customer_usage_limit !== undefined
+        ? Number(row.per_customer_usage_limit)
+        : null,
+    usage_count: Number(row.usage_count ?? 0),
+    allow_stacking: Boolean(row.allow_stacking),
+    is_active: Boolean(row.is_active),
+    starts_at: row.starts_at ? String(row.starts_at) : null,
+    expires_at: row.expires_at ? String(row.expires_at) : null,
+    created_at: row.created_at ? String(row.created_at) : undefined,
+    updated_at: row.updated_at ? String(row.updated_at) : undefined,
+  };
+}
+
+export async function fetchAdminOffers(): Promise<{
+  offers: Offer[];
+  migrationMissing?: boolean;
+  error?: string;
+}> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { offers: [], error: 'Supabase is not configured.' };
+  }
+
+  const { data, error } = await supabase
+    .from('offers')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return {
+        offers: [],
+        migrationMissing: true,
+        error:
+          'Offers tables are not installed in Supabase yet. Run supabase/offers_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logAdminError('fetchAdminOffers', 'offers', error);
+    return { offers: [], error: error.message };
+  }
+
+  return {
+    offers: ((data ?? []) as Record<string, unknown>[]).map(mapOfferRow),
+  };
+}
+
+export async function saveAdminOffer(
+  input: SaveAdminOfferInput
+): Promise<{ offer?: Offer; error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const title = input.title.trim();
+  if (!title) return { error: 'Offer title is required.' };
+
+  const discountValue = Math.round(Number(input.discount_value));
+  if (!Number.isFinite(discountValue) || discountValue <= 0) {
+    return { error: 'Discount value must be greater than 0.' };
+  }
+  if (input.discount_type === 'percentage' && discountValue > 100) {
+    return { error: 'Percentage discount cannot exceed 100%.' };
+  }
+
+  const minCart = Math.max(0, Math.round(Number(input.min_cart_value_inr || 0)));
+  const maxDiscount =
+    input.max_discount_inr !== null && Number.isFinite(Number(input.max_discount_inr))
+      ? Math.max(0, Math.round(Number(input.max_discount_inr)))
+      : null;
+
+  let normalizedCode: string | null = null;
+  if (input.discount_mode === 'coupon') {
+    normalizedCode = (input.coupon_code ?? '').trim().toUpperCase();
+    if (!normalizedCode) {
+      return { error: 'Coupon code is required when discount mode is "Coupon Code".' };
+    }
+    if (!/^[A-Z0-9_-]{3,32}$/.test(normalizedCode)) {
+      return {
+        error:
+          'Coupon code must be 3–32 characters using only letters, numbers, hyphens, or underscores.',
+      };
+    }
+  }
+
+  const startsAtIso = input.starts_at ? new Date(input.starts_at).toISOString() : null;
+  const expiresAtIso = input.expires_at ? new Date(input.expires_at).toISOString() : null;
+  if (startsAtIso && expiresAtIso && new Date(expiresAtIso) <= new Date(startsAtIso)) {
+    return { error: 'Expiry date/time must be after the start date/time.' };
+  }
+
+  if (input.applies_to === 'products' && input.product_ids.length === 0) {
+    return { error: 'Select at least one target product when Applies To is Specific Products.' };
+  }
+  if (input.applies_to === 'categories' && input.categories.length === 0) {
+    return { error: 'Select at least one category when Applies To is Specific Categories.' };
+  }
+
+  const totalLimit =
+    input.total_usage_limit !== null && Number.isFinite(Number(input.total_usage_limit))
+      ? Math.round(Number(input.total_usage_limit))
+      : null;
+  if (totalLimit !== null && totalLimit <= 0) {
+    return { error: 'Total usage limit must be at least 1 or left blank for unlimited.' };
+  }
+
+  const perCustomerLimit =
+    input.per_customer_usage_limit !== null &&
+    Number.isFinite(Number(input.per_customer_usage_limit))
+      ? Math.round(Number(input.per_customer_usage_limit))
+      : null;
+  if (perCustomerLimit !== null && perCustomerLimit <= 0) {
+    return { error: 'Per-customer usage limit must be at least 1 or left blank for unlimited.' };
+  }
+
+  const payload = {
+    title,
+    description: input.description.trim(),
+    discount_mode: input.discount_mode,
+    coupon_code: normalizedCode,
+    discount_type: input.discount_type,
+    discount_value: discountValue,
+    min_cart_value_inr: minCart,
+    max_discount_inr: maxDiscount,
+    applies_to: input.applies_to,
+    product_ids: input.applies_to === 'products' ? input.product_ids : [],
+    categories: input.applies_to === 'categories' ? input.categories : [],
+    total_usage_limit: totalLimit,
+    per_customer_usage_limit: perCustomerLimit,
+    allow_stacking: false,
+    is_active: Boolean(input.is_active),
+    starts_at: startsAtIso,
+    expires_at: expiresAtIso,
+    updated_at: new Date().toISOString(),
+  };
+
+  const query = input.id
+    ? supabase.from('offers').update(payload).eq('id', input.id).select().single()
+    : supabase.from('offers').insert(payload).select().single();
+
+  const { data, error } = await query;
+  if (error) {
+    if (error.code === '23505') {
+      return { error: `Coupon code "${normalizedCode}" is already in use by another offer.` };
+    }
+    logAdminError('saveAdminOffer', 'offers', error);
+    return { error: error.message };
+  }
+
+  return { offer: mapOfferRow(data as Record<string, unknown>) };
+}
+
+export async function toggleOfferActiveAdmin(
+  offerId: string,
+  isActive: boolean
+): Promise<{ error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const { error } = await supabase
+    .from('offers')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq('id', offerId);
+
+  if (error) {
+    logAdminError('toggleOfferActiveAdmin', 'offers', error);
+    return { error: error.message };
+  }
+  return {};
+}
+
+export async function deleteAdminOffer(
+  offerId: string
+): Promise<{ error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const { error } = await supabase.from('offers').delete().eq('id', offerId);
+  if (error) {
+    logAdminError('deleteAdminOffer', 'offers', error);
+    return { error: error.message };
+  }
+  return {};
+}
+
+// ============================================================================
+// STOREFRONT PROMOTIONAL BANNERS ADMIN CRUD
+// ============================================================================
+export interface SaveAdminBannerInput {
+  id?: string;
+  offer_title: string;
+  banner_text: string;
+  cta_text: string;
+  destination_type: StorefrontBannerDestinationType;
+  destination_value: string;
+  is_active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+}
+
+function mapBannerRow(row: Record<string, unknown>): StorefrontBanner {
+  const destType = String(row.destination_type ?? 'shop');
+  const validDest: StorefrontBannerDestinationType =
+    destType === 'category' || destType === 'product' || destType === 'url'
+      ? destType
+      : 'shop';
+
+  return {
+    id: String(row.id ?? ''),
+    offer_title: String(row.offer_title ?? ''),
+    banner_text: String(row.banner_text ?? ''),
+    cta_text: String(row.cta_text ?? 'Shop Now'),
+    destination_type: validDest,
+    destination_value: String(row.destination_value ?? ''),
+    is_active: Boolean(row.is_active),
+    starts_at: row.starts_at ? String(row.starts_at) : null,
+    expires_at: row.expires_at ? String(row.expires_at) : null,
+    created_at: row.created_at ? String(row.created_at) : undefined,
+    updated_at: row.updated_at ? String(row.updated_at) : undefined,
+  };
+}
+
+export async function fetchAdminBanners(): Promise<{
+  banners: StorefrontBanner[];
+  migrationMissing?: boolean;
+  error?: string;
+}> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { banners: [], error: 'Supabase is not configured.' };
+  }
+
+  const { data, error } = await supabase
+    .from('storefront_banners')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return {
+        banners: [],
+        migrationMissing: true,
+        error:
+          'Storefront banners table is not installed in Supabase yet. Run supabase/offers_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logAdminError('fetchAdminBanners', 'storefront_banners', error);
+    return { banners: [], error: error.message };
+  }
+
+  return {
+    banners: ((data ?? []) as Record<string, unknown>[]).map(mapBannerRow),
+  };
+}
+
+export async function saveAdminBanner(
+  input: SaveAdminBannerInput
+): Promise<{ banner?: StorefrontBanner; error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const bannerText = input.banner_text.trim();
+  if (!bannerText) {
+    return { error: 'Banner message text is required.' };
+  }
+
+  const startsAtIso = input.starts_at ? new Date(input.starts_at).toISOString() : null;
+  const expiresAtIso = input.expires_at ? new Date(input.expires_at).toISOString() : null;
+  if (startsAtIso && expiresAtIso && new Date(expiresAtIso) <= new Date(startsAtIso)) {
+    return { error: 'Banner expiry date/time must be after start date/time.' };
+  }
+
+  const payload = {
+    offer_title: input.offer_title.trim(),
+    banner_text: bannerText,
+    cta_text: input.cta_text.trim() || 'Shop Now',
+    destination_type: input.destination_type,
+    destination_value: input.destination_value.trim(),
+    is_active: Boolean(input.is_active),
+    starts_at: startsAtIso,
+    expires_at: expiresAtIso,
+    updated_at: new Date().toISOString(),
+  };
+
+  const query = input.id
+    ? supabase
+        .from('storefront_banners')
+        .update(payload)
+        .eq('id', input.id)
+        .select()
+        .single()
+    : supabase.from('storefront_banners').insert(payload).select().single();
+
+  const { data, error } = await query;
+  if (error) {
+    logAdminError('saveAdminBanner', 'storefront_banners', error);
+    return { error: error.message };
+  }
+
+  return { banner: mapBannerRow(data as Record<string, unknown>) };
+}
+
+export async function toggleBannerActiveAdmin(
+  bannerId: string,
+  isActive: boolean
+): Promise<{ error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const { error } = await supabase
+    .from('storefront_banners')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq('id', bannerId);
+
+  if (error) {
+    logAdminError('toggleBannerActiveAdmin', 'storefront_banners', error);
+    return { error: error.message };
+  }
+  return {};
+}
+
+export async function deleteAdminBanner(
+  bannerId: string
+): Promise<{ error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const { error } = await supabase
+    .from('storefront_banners')
+    .delete()
+    .eq('id', bannerId);
+
+  if (error) {
+    logAdminError('deleteAdminBanner', 'storefront_banners', error);
+    return { error: error.message };
+  }
+  return {};
+}
+
 
 

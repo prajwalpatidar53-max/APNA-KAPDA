@@ -10,7 +10,16 @@ declare
   tbl text;
   cols text;
 begin
-  foreach tbl in array array['profiles', 'products', 'orders', 'order_items', 'newsletter_subscribers']
+  foreach tbl in array array[
+    'profiles',
+    'products',
+    'orders',
+    'order_items',
+    'newsletter_subscribers',
+    'offers',
+    'offer_redemptions',
+    'storefront_banners'
+  ]
   loop
     select string_agg(column_name || ' (' || data_type || ')', ', ' order by ordinal_position)
       into cols
@@ -214,6 +223,10 @@ create table if not exists public.orders (
   order_status text not null default 'pending' check (order_status in ('pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled')),
   subtotal_inr integer not null check (subtotal_inr >= 0),
   shipping_inr integer not null check (shipping_inr >= 0),
+  discount_inr integer not null default 0 check (discount_inr >= 0),
+  applied_offer_id uuid,
+  applied_coupon_code text,
+  applied_offer_title text,
   total_inr integer not null check (total_inr >= 0),
   notes text,
   idempotency_key text,
@@ -231,6 +244,10 @@ create table if not exists public.orders (
 
 alter table public.orders add column if not exists notes text;
 alter table public.orders add column if not exists idempotency_key text;
+alter table public.orders add column if not exists discount_inr integer not null default 0;
+alter table public.orders add column if not exists applied_offer_id uuid;
+alter table public.orders add column if not exists applied_coupon_code text;
+alter table public.orders add column if not exists applied_offer_title text;
 alter table public.orders add column if not exists cancelled_at timestamptz;
 alter table public.orders add column if not exists cancelled_by text;
 alter table public.orders add column if not exists cancelled_by_user_id uuid references auth.users(id) on delete set null;
@@ -241,6 +258,20 @@ alter table public.orders add column if not exists stock_restoration_status text
 alter table public.orders add column if not exists refund_status text not null default 'none';
 alter table public.orders add column if not exists created_at timestamptz not null default now();
 alter table public.orders add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_catalog.pg_constraint con
+     where con.conrelid = 'public.orders'::regclass
+       and con.conname = 'orders_discount_inr_nonnegative_check'
+  ) then
+    alter table public.orders
+      add constraint orders_discount_inr_nonnegative_check
+      check (discount_inr >= 0);
+  end if;
+end $$;
 
 create index if not exists orders_user_id_created_idx
   on public.orders (user_id, created_at desc);
@@ -357,6 +388,143 @@ create table if not exists public.newsletter_subscribers (
 );
 
 -- ============================================================================
+-- 5B. OFFERS, COUPONS, OFFER REDEMPTIONS & STOREFRONT BANNERS TABLES
+-- ============================================================================
+create table if not exists public.offers (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text not null default '',
+  discount_mode text not null check (discount_mode in ('automatic', 'coupon')),
+  coupon_code text,
+  discount_type text not null check (discount_type in ('percentage', 'fixed')),
+  discount_value integer not null check (discount_value > 0),
+  min_cart_value_inr integer not null default 0 check (min_cart_value_inr >= 0),
+  max_discount_inr integer check (max_discount_inr is null or max_discount_inr >= 0),
+  applies_to text not null default 'all' check (applies_to in ('all', 'products', 'categories')),
+  product_ids uuid[] not null default array[]::uuid[],
+  categories text[] not null default array[]::text[],
+  total_usage_limit integer check (total_usage_limit is null or total_usage_limit > 0),
+  per_customer_usage_limit integer check (per_customer_usage_limit is null or per_customer_usage_limit > 0),
+  usage_count integer not null default 0 check (usage_count >= 0),
+  allow_stacking boolean not null default false,
+  is_active boolean not null default true,
+  starts_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint offers_percentage_cap_check
+    check (discount_type <> 'percentage' or discount_value <= 100),
+  constraint offers_schedule_window_check
+    check (expires_at is null or starts_at is null or expires_at > starts_at),
+  constraint offers_coupon_mode_consistency_check
+    check (
+      (discount_mode = 'automatic' and coupon_code is null)
+      or (discount_mode = 'coupon' and nullif(trim(coalesce(coupon_code, '')), '') is not null)
+    )
+);
+
+create unique index if not exists offers_coupon_code_unique_idx
+  on public.offers (upper(coupon_code))
+  where coupon_code is not null;
+
+create index if not exists offers_active_schedule_idx
+  on public.offers (is_active, discount_mode, starts_at, expires_at);
+
+create or replace function public.normalize_offer_row()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $$
+begin
+  new.title := trim(coalesce(new.title, ''));
+  if new.title = '' then
+    raise exception 'Offer title cannot be empty.';
+  end if;
+
+  if new.discount_mode = 'coupon' then
+    new.coupon_code := nullif(pg_catalog.upper(trim(coalesce(new.coupon_code, ''))), '');
+    if new.coupon_code is null then
+      raise exception 'Coupon code is required when discount_mode is "coupon".';
+    end if;
+    if new.coupon_code !~ '^[A-Z0-9_-]{3,32}$' then
+      raise exception 'Coupon code must be 3-32 characters (letters, numbers, hyphen, underscore).';
+    end if;
+  else
+    new.coupon_code := null;
+  end if;
+
+  new.product_ids := coalesce(new.product_ids, array[]::uuid[]);
+  new.categories := coalesce(new.categories, array[]::text[]);
+  new.updated_at := pg_catalog.now();
+  return new;
+end;
+$$;
+
+revoke all on function public.normalize_offer_row() from public, anon, authenticated;
+
+drop trigger if exists offers_normalize_before_write on public.offers;
+create trigger offers_normalize_before_write
+  before insert or update on public.offers
+  for each row execute procedure public.normalize_offer_row();
+
+create table if not exists public.offer_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  offer_id uuid references public.offers(id) on delete cascade not null,
+  order_id uuid references public.orders(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete set null,
+  coupon_code text,
+  discount_inr integer not null check (discount_inr >= 0),
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists offer_redemptions_offer_order_idx
+  on public.offer_redemptions (offer_id, order_id);
+
+create index if not exists offer_redemptions_offer_user_idx
+  on public.offer_redemptions (offer_id, user_id);
+
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_catalog.pg_constraint con
+     where con.conrelid = 'public.orders'::regclass
+       and con.conname = 'orders_applied_offer_id_fkey'
+  ) then
+    alter table public.orders
+      add constraint orders_applied_offer_id_fkey
+      foreign key (applied_offer_id)
+      references public.offers(id)
+      on delete set null;
+  end if;
+end $$;
+
+create table if not exists public.storefront_banners (
+  id uuid primary key default gen_random_uuid(),
+  banner_text text not null,
+  offer_title text not null default '',
+  cta_text text not null default 'Shop Now',
+  destination_type text not null default 'shop'
+    check (destination_type in ('shop', 'category', 'product', 'url')),
+  destination_value text not null default '',
+  is_active boolean not null default false,
+  starts_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint storefront_banners_schedule_check
+    check (expires_at is null or starts_at is null or expires_at > starts_at)
+);
+
+create index if not exists storefront_banners_active_schedule_idx
+  on public.storefront_banners (is_active, starts_at, expires_at, updated_at desc);
+
+drop trigger if exists storefront_banners_set_updated_at on public.storefront_banners;
+create trigger storefront_banners_set_updated_at
+  before update on public.storefront_banners
+  for each row execute procedure public.set_updated_at();
+
+-- ============================================================================
 -- 6. ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
 alter table public.profiles enable row level security;
@@ -364,6 +532,9 @@ alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.newsletter_subscribers enable row level security;
+alter table public.offers enable row level security;
+alter table public.offer_redemptions enable row level security;
+alter table public.storefront_banners enable row level security;
 
 -- PROFILES POLICIES
 drop policy if exists "Users can view own profile" on public.profiles;
@@ -538,6 +709,53 @@ drop policy if exists "Admins can view subscribers" on public.newsletter_subscri
 create policy "Admins can view subscribers"
   on public.newsletter_subscribers for select
   using (public.is_admin());
+
+-- OFFERS, REDEMPTIONS & STOREFRONT BANNERS POLICIES
+drop policy if exists "Admins can manage offers" on public.offers;
+create policy "Admins can manage offers"
+  on public.offers for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+drop policy if exists "Public can view active offers" on public.offers;
+create policy "Public can view active offers"
+  on public.offers for select
+  using (
+    is_active = true
+    and (starts_at is null or starts_at <= now())
+    and (expires_at is null or expires_at >= now())
+  );
+
+revoke insert, update, delete on table public.offer_redemptions from public, anon, authenticated;
+
+drop policy if exists "Admins can view offer redemptions" on public.offer_redemptions;
+create policy "Admins can view offer redemptions"
+  on public.offer_redemptions for select
+  to authenticated
+  using (public.is_admin());
+
+drop policy if exists "Customers can view own offer redemptions" on public.offer_redemptions;
+create policy "Customers can view own offer redemptions"
+  on public.offer_redemptions for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Admins can manage storefront banners" on public.storefront_banners;
+create policy "Admins can manage storefront banners"
+  on public.storefront_banners for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+drop policy if exists "Public can view active storefront banners" on public.storefront_banners;
+create policy "Public can view active storefront banners"
+  on public.storefront_banners for select
+  using (
+    is_active = true
+    and (starts_at is null or starts_at <= now())
+    and (expires_at is null or expires_at >= now())
+  );
 
 -- ============================================================================
 -- 7. STORAGE BUCKET & RLS POLICIES (Product Media)
@@ -853,8 +1071,428 @@ create trigger order_items_decrement_stock
   before insert on public.order_items
   for each row execute procedure public.decrement_stock_on_order_item();
 
+-- ============================================================================
+-- 8B. SERVER-SIDE DISCOUNT EVALUATION & COUPON PREVIEW RPCs
+-- ============================================================================
+create or replace function public.calculate_single_offer_discount_inr(
+  p_offer public.offers,
+  p_cart_lines jsonb,
+  p_subtotal_inr integer,
+  p_user_id uuid default null,
+  p_now timestamptz default now()
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_eligible_subtotal_big bigint := 0;
+  v_line record;
+  v_line_prod_uuid uuid;
+  v_line_category text;
+  v_line_total bigint;
+  v_user_redemptions integer := 0;
+  v_discount_big bigint := 0;
+  v_discount_inr integer := 0;
+begin
+  if p_offer.id is null then
+    return pg_catalog.jsonb_build_object('eligible', false, 'reason', 'Offer not found.', 'discount_inr', 0);
+  end if;
+
+  if p_offer.is_active is distinct from true then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', case when p_offer.discount_mode = 'coupon'
+        then pg_catalog.format('Coupon code "%s" is currently inactive.', p_offer.coupon_code)
+        else 'Offer is inactive.' end,
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.starts_at is not null and p_now < p_offer.starts_at then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', case when p_offer.discount_mode = 'coupon'
+        then pg_catalog.format('Coupon code "%s" is not active yet.', p_offer.coupon_code)
+        else 'Offer has not started yet.' end,
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.expires_at is not null and p_now > p_offer.expires_at then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', case when p_offer.discount_mode = 'coupon'
+        then pg_catalog.format('Coupon code "%s" has expired.', p_offer.coupon_code)
+        else 'Offer has expired.' end,
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.total_usage_limit is not null and coalesce(p_offer.usage_count, 0) >= p_offer.total_usage_limit then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', case when p_offer.discount_mode = 'coupon'
+        then pg_catalog.format('Coupon code "%s" has reached its maximum usage limit.', p_offer.coupon_code)
+        else 'Offer usage limit reached.' end,
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.per_customer_usage_limit is not null and p_user_id is not null then
+    select pg_catalog.count(*)::integer
+      into v_user_redemptions
+      from public.offer_redemptions r
+     where r.offer_id = p_offer.id
+       and r.user_id = p_user_id;
+
+    if v_user_redemptions >= p_offer.per_customer_usage_limit then
+      return pg_catalog.jsonb_build_object(
+        'eligible', false,
+        'reason', case when p_offer.discount_mode = 'coupon'
+          then pg_catalog.format('You have already used coupon code "%s" the maximum allowed times.', p_offer.coupon_code)
+          else 'Per-customer offer limit reached.' end,
+        'discount_inr', 0
+      );
+    end if;
+  end if;
+
+  if coalesce(p_subtotal_inr, 0) <= 0 then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', 'Add items to your bag before applying an offer.',
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_subtotal_inr < coalesce(p_offer.min_cart_value_inr, 0) then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', pg_catalog.format(
+        'Minimum cart value of ₹%s is required%s.',
+        p_offer.min_cart_value_inr,
+        case when p_offer.coupon_code is not null then ' for coupon "' || p_offer.coupon_code || '"' else '' end
+      ),
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.applies_to = 'all' then
+    v_eligible_subtotal_big := p_subtotal_inr::bigint;
+  elsif p_offer.applies_to = 'products' then
+    for v_line in select value from pg_catalog.jsonb_array_elements(coalesce(p_cart_lines, '[]'::jsonb))
+    loop
+      v_line_prod_uuid := nullif(v_line.value ->> 'product_uuid', '')::uuid;
+      v_line_total := coalesce((v_line.value ->> 'line_total_inr')::bigint, 0);
+      if v_line_prod_uuid is not null and v_line_prod_uuid = any(coalesce(p_offer.product_ids, array[]::uuid[])) then
+        v_eligible_subtotal_big := v_eligible_subtotal_big + v_line_total;
+      end if;
+    end loop;
+  elsif p_offer.applies_to = 'categories' then
+    for v_line in select value from pg_catalog.jsonb_array_elements(coalesce(p_cart_lines, '[]'::jsonb))
+    loop
+      v_line_category := pg_catalog.lower(trim(coalesce(v_line.value ->> 'category', '')));
+      v_line_total := coalesce((v_line.value ->> 'line_total_inr')::bigint, 0);
+      if v_line_category <> '' and exists (
+        select 1
+          from pg_catalog.unnest(coalesce(p_offer.categories, array[]::text[])) as cat
+         where pg_catalog.lower(trim(cat)) = v_line_category
+      ) then
+        v_eligible_subtotal_big := v_eligible_subtotal_big + v_line_total;
+      end if;
+    end loop;
+  end if;
+
+  if v_eligible_subtotal_big <= 0 then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', case when p_offer.discount_mode = 'coupon'
+        then pg_catalog.format('Coupon "%s" does not apply to any items currently in your bag.', p_offer.coupon_code)
+        else 'Offer does not apply to items in your bag.' end,
+      'discount_inr', 0
+    );
+  end if;
+
+  if p_offer.discount_type = 'percentage' then
+    v_discount_big := (v_eligible_subtotal_big * p_offer.discount_value::bigint) / 100;
+  else
+    v_discount_big := p_offer.discount_value::bigint;
+  end if;
+
+  if p_offer.max_discount_inr is not null and v_discount_big > p_offer.max_discount_inr::bigint then
+    v_discount_big := p_offer.max_discount_inr::bigint;
+  end if;
+
+  if v_discount_big > v_eligible_subtotal_big then
+    v_discount_big := v_eligible_subtotal_big;
+  end if;
+
+  if v_discount_big > p_subtotal_inr::bigint then
+    v_discount_big := p_subtotal_inr::bigint;
+  end if;
+
+  if v_discount_big < 0 then
+    v_discount_big := 0;
+  end if;
+
+  v_discount_inr := v_discount_big::integer;
+
+  if v_discount_inr <= 0 then
+    return pg_catalog.jsonb_build_object(
+      'eligible', false,
+      'reason', 'This offer produces ₹0 discount for the current bag.',
+      'discount_inr', 0
+    );
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'eligible', true,
+    'reason', null,
+    'discount_inr', v_discount_inr
+  );
+end;
+$$;
+
+revoke all on function public.calculate_single_offer_discount_inr(
+  public.offers, jsonb, integer, uuid, timestamptz
+) from public, anon, authenticated;
+
+create or replace function public.preview_checkout_discount(
+  p_items jsonb default '[]'::jsonb,
+  p_coupon_code text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_uid uuid;
+  v_now timestamptz := pg_catalog.now();
+  v_coupon_code text;
+  v_item record;
+  v_prod public.products%rowtype;
+  v_uuid_from_field uuid;
+  v_uuid_from_pid uuid;
+  v_lookup_uuid uuid;
+  v_qty integer;
+  v_line_total_big bigint;
+  v_subtotal_big bigint := 0;
+  v_subtotal_inr integer := 0;
+  v_cart_lines jsonb := '[]'::jsonb;
+  v_coupon_offer public.offers%rowtype;
+  v_eval jsonb;
+  v_best_offer public.offers%rowtype;
+  v_best_discount integer := 0;
+  v_cand public.offers%rowtype;
+  v_cand_eval jsonb;
+  v_cand_discount integer;
+  v_discount_inr integer := 0;
+  v_discounted_subtotal integer := 0;
+  v_shipping_inr integer := 0;
+  v_total_inr integer := 0;
+begin
+  v_uid := auth.uid();
+  v_coupon_code := nullif(pg_catalog.upper(trim(coalesce(p_coupon_code, ''))), '');
+
+  if p_items is null
+     or pg_catalog.jsonb_typeof(p_items) <> 'array'
+     or pg_catalog.jsonb_array_length(p_items) = 0 then
+    return pg_catalog.jsonb_build_object(
+      'valid', v_coupon_code is null,
+      'message', case when v_coupon_code is not null then 'Your bag is empty.' else null end,
+      'applied_offer_id', null,
+      'applied_coupon_code', null,
+      'applied_offer_title', null,
+      'discount_mode', null,
+      'discount_inr', 0,
+      'subtotal_inr', 0,
+      'shipping_inr', 0,
+      'total_inr', 0,
+      'stacking_policy', 'no_stacking'
+    );
+  end if;
+
+  for v_item in
+    select
+      elem,
+      nullif(trim(coalesce(elem ->> 'product_uuid', '')), '') as raw_product_uuid,
+      trim(coalesce(elem ->> 'product_id', '')) as product_id
+    from pg_catalog.jsonb_array_elements(p_items) as elem
+  loop
+    v_qty := coalesce((v_item.elem ->> 'quantity')::integer, 0);
+    if v_qty <= 0 then
+      raise exception 'Order item quantity must be positive.';
+    end if;
+
+    if v_item.raw_product_uuid is not null
+       and v_item.raw_product_uuid ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      v_uuid_from_field := v_item.raw_product_uuid::uuid;
+    else
+      v_uuid_from_field := null;
+    end if;
+
+    if v_item.product_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      v_uuid_from_pid := v_item.product_id::uuid;
+    else
+      v_uuid_from_pid := null;
+    end if;
+
+    v_lookup_uuid := coalesce(v_uuid_from_field, v_uuid_from_pid);
+
+    if v_lookup_uuid is not null then
+      select * into v_prod from public.products p where p.id = v_lookup_uuid and p.is_active = true;
+    else
+      select * into v_prod from public.products p where p.slug = v_item.product_id and p.is_active = true limit 1;
+    end if;
+
+    if not found then
+      raise exception 'One or more bag products are unavailable. Refresh your bag.';
+    end if;
+
+    v_line_total_big := v_prod.price_inr::bigint * v_qty::bigint;
+    v_subtotal_big := v_subtotal_big + v_line_total_big;
+
+    v_cart_lines := v_cart_lines || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'product_uuid', v_prod.id,
+        'category', v_prod.category,
+        'line_total_inr', v_line_total_big
+      )
+    );
+  end loop;
+
+  v_subtotal_inr := v_subtotal_big::integer;
+
+  if v_coupon_code is not null then
+    select *
+      into v_coupon_offer
+      from public.offers o
+     where o.discount_mode = 'coupon'
+       and pg_catalog.upper(o.coupon_code) = v_coupon_code
+     limit 1;
+
+    if not found then
+      return pg_catalog.jsonb_build_object(
+        'valid', false,
+        'message', pg_catalog.format('Coupon code "%s" is not valid.', v_coupon_code),
+        'applied_offer_id', null,
+        'applied_coupon_code', null,
+        'applied_offer_title', null,
+        'discount_mode', null,
+        'discount_inr', 0,
+        'subtotal_inr', v_subtotal_inr,
+        'shipping_inr', case when v_subtotal_inr >= 1499 then 0 else 99 end,
+        'total_inr', v_subtotal_inr + case when v_subtotal_inr >= 1499 then 0 else 99 end,
+        'stacking_policy', 'no_stacking'
+      );
+    end if;
+
+    v_eval := public.calculate_single_offer_discount_inr(
+      v_coupon_offer,
+      v_cart_lines,
+      v_subtotal_inr,
+      v_uid,
+      v_now
+    );
+
+    if coalesce((v_eval ->> 'eligible')::boolean, false) is distinct from true then
+      return pg_catalog.jsonb_build_object(
+        'valid', false,
+        'message', v_eval ->> 'reason',
+        'applied_offer_id', null,
+        'applied_coupon_code', null,
+        'applied_offer_title', null,
+        'discount_mode', null,
+        'discount_inr', 0,
+        'subtotal_inr', v_subtotal_inr,
+        'shipping_inr', case when v_subtotal_inr >= 1499 then 0 else 99 end,
+        'total_inr', v_subtotal_inr + case when v_subtotal_inr >= 1499 then 0 else 99 end,
+        'stacking_policy', 'no_stacking'
+      );
+    end if;
+
+    v_discount_inr := (v_eval ->> 'discount_inr')::integer;
+    v_discounted_subtotal := pg_catalog.greatest(0, v_subtotal_inr - v_discount_inr);
+    v_shipping_inr := case when v_discounted_subtotal >= 1499 or v_subtotal_inr = 0 then 0 else 99 end;
+    v_total_inr := v_discounted_subtotal + v_shipping_inr;
+
+    return pg_catalog.jsonb_build_object(
+      'valid', true,
+      'message', pg_catalog.format('Coupon "%s" applied: -₹%s', v_coupon_offer.coupon_code, v_discount_inr),
+      'applied_offer_id', v_coupon_offer.id,
+      'applied_coupon_code', v_coupon_offer.coupon_code,
+      'applied_offer_title', v_coupon_offer.title,
+      'discount_mode', v_coupon_offer.discount_mode,
+      'discount_inr', v_discount_inr,
+      'subtotal_inr', v_subtotal_inr,
+      'shipping_inr', v_shipping_inr,
+      'total_inr', v_total_inr,
+      'stacking_policy', 'no_stacking'
+    );
+  end if;
+
+  -- Automatic offer evaluation (no stacking: selects single highest eligible discount)
+  for v_cand in
+    select *
+      from public.offers o
+     where o.discount_mode = 'automatic'
+       and o.is_active = true
+       and (o.starts_at is null or o.starts_at <= v_now)
+       and (o.expires_at is null or o.expires_at >= v_now)
+     order by o.created_at desc
+  loop
+    v_cand_eval := public.calculate_single_offer_discount_inr(
+      v_cand,
+      v_cart_lines,
+      v_subtotal_inr,
+      v_uid,
+      v_now
+    );
+
+    if coalesce((v_cand_eval ->> 'eligible')::boolean, false) then
+      v_cand_discount := coalesce((v_cand_eval ->> 'discount_inr')::integer, 0);
+      if v_cand_discount > v_best_discount then
+        v_best_discount := v_cand_discount;
+        v_best_offer := v_cand;
+      end if;
+    end if;
+  end loop;
+
+  v_discount_inr := v_best_discount;
+  v_discounted_subtotal := pg_catalog.greatest(0, v_subtotal_inr - v_discount_inr);
+  v_shipping_inr := case when v_discounted_subtotal >= 1499 or v_subtotal_inr = 0 then 0 else 99 end;
+  v_total_inr := v_discounted_subtotal + v_shipping_inr;
+
+  return pg_catalog.jsonb_build_object(
+    'valid', true,
+    'message', case
+      when v_best_offer.id is not null and v_discount_inr > 0
+      then pg_catalog.format('Automatic offer "%s" applied: -₹%s', v_best_offer.title, v_discount_inr)
+      else null
+    end,
+    'applied_offer_id', v_best_offer.id,
+    'applied_coupon_code', null,
+    'applied_offer_title', v_best_offer.title,
+    'discount_mode', v_best_offer.discount_mode,
+    'discount_inr', v_discount_inr,
+    'subtotal_inr', v_subtotal_inr,
+    'shipping_inr', v_shipping_inr,
+    'total_inr', v_total_inr,
+    'stacking_policy', 'no_stacking'
+  );
+end;
+$$;
+
+revoke all on function public.preview_checkout_discount(jsonb, text) from public;
+grant execute on function public.preview_checkout_discount(jsonb, text) to anon, authenticated;
+
 drop function if exists public.create_order_atomic(
   text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb
+);
+drop function if exists public.create_order_atomic(
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text
 );
 
 create or replace function public.create_order_atomic(
@@ -869,7 +1507,9 @@ create or replace function public.create_order_atomic(
   p_total_inr integer default null,
   p_notes text default null,
   p_items jsonb default '[]'::jsonb,
-  p_idempotency_key text default null
+  p_idempotency_key text default null,
+  p_coupon_code text default null,
+  p_discount_inr integer default null
 )
 returns jsonb
 language plpgsql
@@ -878,7 +1518,9 @@ set search_path = pg_catalog
 as $$
 declare
   v_uid uuid;
+  v_now timestamptz := pg_catalog.now();
   v_idempotency_key text;
+  v_req_coupon_code text;
   v_customer_name text;
   v_customer_email text;
   v_customer_phone text;
@@ -924,6 +1566,14 @@ declare
   v_line_total_big bigint;
   v_calc_subtotal_big bigint := 0;
   v_calc_subtotal_inr integer;
+  v_offer_cart_lines jsonb := '[]'::jsonb;
+  v_chosen_offer public.offers%rowtype;
+  v_cand_offer public.offers%rowtype;
+  v_offer_eval jsonb;
+  v_best_auto_discount integer := 0;
+  v_best_auto_id uuid := null;
+  v_calc_discount_inr integer := 0;
+  v_discounted_subtotal integer := 0;
   v_calc_shipping_inr integer;
   v_calc_total_big bigint;
   v_calc_total_inr integer;
@@ -965,6 +1615,8 @@ begin
       );
     end if;
   end if;
+
+  v_req_coupon_code := nullif(pg_catalog.upper(trim(coalesce(p_coupon_code, ''))), '');
 
   v_customer_name := nullif(trim(coalesce(p_customer_name, '')), '');
   v_customer_email := coalesce(
@@ -1008,6 +1660,7 @@ begin
 
   if (p_subtotal_inr is not null and p_subtotal_inr < 0)
      or (p_shipping_inr is not null and p_shipping_inr < 0)
+     or (p_discount_inr is not null and p_discount_inr < 0)
      or (p_total_inr is not null and p_total_inr < 0) then
     raise exception 'Order monetary totals must be non-negative integers.';
   end if;
@@ -1266,6 +1919,14 @@ begin
       raise exception 'Order subtotal exceeds maximum supported integer amount.';
     end if;
 
+    v_offer_cart_lines := v_offer_cart_lines || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'product_uuid', v_resolved_product_uuid,
+        'category', v_prod.category,
+        'line_total_inr', v_line_total_big
+      )
+    );
+
     v_resolved_items := v_resolved_items || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
         'product_uuid', v_resolved_product_uuid,
@@ -1281,15 +1942,103 @@ begin
 
   v_calc_subtotal_inr := v_calc_subtotal_big::integer;
 
-  -- Explicit trusted server-side shipping rule (mirrors src/data/catalog.ts):
+  -- Server-side trusted offer / coupon resolution & locking (default policy: no stacking)
+  v_chosen_offer.id := null;
+  v_calc_discount_inr := 0;
+
+  if v_req_coupon_code is not null then
+    select *
+      into v_chosen_offer
+      from public.offers o
+     where o.discount_mode = 'coupon'
+       and pg_catalog.upper(o.coupon_code) = v_req_coupon_code
+     limit 1
+     for update;
+
+    if not found then
+      raise exception 'Coupon code "%" is invalid.', v_req_coupon_code;
+    end if;
+
+    v_offer_eval := public.calculate_single_offer_discount_inr(
+      v_chosen_offer,
+      v_offer_cart_lines,
+      v_calc_subtotal_inr,
+      v_uid,
+      v_now
+    );
+
+    if coalesce((v_offer_eval ->> 'eligible')::boolean, false) is distinct from true then
+      raise exception '%', coalesce(v_offer_eval ->> 'reason', 'Coupon code cannot be applied.');
+    end if;
+
+    v_calc_discount_inr := coalesce((v_offer_eval ->> 'discount_inr')::integer, 0);
+  else
+    for v_cand_offer in
+      select *
+        from public.offers o
+       where o.discount_mode = 'automatic'
+         and o.is_active = true
+         and (o.starts_at is null or o.starts_at <= v_now)
+         and (o.expires_at is null or o.expires_at >= v_now)
+       order by o.created_at desc
+    loop
+      v_offer_eval := public.calculate_single_offer_discount_inr(
+        v_cand_offer,
+        v_offer_cart_lines,
+        v_calc_subtotal_inr,
+        v_uid,
+        v_now
+      );
+
+      if coalesce((v_offer_eval ->> 'eligible')::boolean, false) then
+        if coalesce((v_offer_eval ->> 'discount_inr')::integer, 0) > v_best_auto_discount then
+          v_best_auto_discount := coalesce((v_offer_eval ->> 'discount_inr')::integer, 0);
+          v_best_auto_id := v_cand_offer.id;
+        end if;
+      end if;
+    end loop;
+
+    if v_best_auto_id is not null then
+      select *
+        into v_chosen_offer
+        from public.offers o
+       where o.id = v_best_auto_id
+       for update;
+
+      if found then
+        v_offer_eval := public.calculate_single_offer_discount_inr(
+          v_chosen_offer,
+          v_offer_cart_lines,
+          v_calc_subtotal_inr,
+          v_uid,
+          v_now
+        );
+        if coalesce((v_offer_eval ->> 'eligible')::boolean, false) then
+          v_calc_discount_inr := coalesce((v_offer_eval ->> 'discount_inr')::integer, 0);
+        else
+          v_chosen_offer.id := null;
+          v_calc_discount_inr := 0;
+        end if;
+      end if;
+    end if;
+  end if;
+
+  if p_discount_inr is not null and p_discount_inr <> v_calc_discount_inr then
+    raise exception 'Discount mismatch (submitted ₹%, server-verified ₹%). Refresh your bag and try again.',
+      p_discount_inr, v_calc_discount_inr;
+  end if;
+
+  v_discounted_subtotal := pg_catalog.greatest(0, v_calc_subtotal_inr - v_calc_discount_inr);
+
+  -- Explicit trusted server-side shipping rule after discount:
   -- Orders >= ₹1,499 qualify for complimentary shipping (₹0); orders < ₹1,499 pay ₹99.
-  if v_calc_subtotal_inr >= 1499 then
+  if v_discounted_subtotal >= 1499 or v_calc_subtotal_inr = 0 then
     v_calc_shipping_inr := 0;
   else
     v_calc_shipping_inr := 99;
   end if;
 
-  v_calc_total_big := v_calc_subtotal_inr::bigint + v_calc_shipping_inr::bigint;
+  v_calc_total_big := v_discounted_subtotal::bigint + v_calc_shipping_inr::bigint;
   if v_calc_total_big > 2147483647 then
     raise exception 'Order total exceeds maximum supported integer amount.';
   end if;
@@ -1348,6 +2097,10 @@ begin
         order_status,
         subtotal_inr,
         shipping_inr,
+        discount_inr,
+        applied_offer_id,
+        applied_coupon_code,
+        applied_offer_title,
         total_inr,
         notes,
         idempotency_key
@@ -1364,6 +2117,10 @@ begin
         'pending',
         v_calc_subtotal_inr,
         v_calc_shipping_inr,
+        v_calc_discount_inr,
+        v_chosen_offer.id,
+        v_chosen_offer.coupon_code,
+        v_chosen_offer.title,
         v_calc_total_inr,
         nullif(trim(coalesce(p_notes, '')), ''),
         v_idempotency_key
@@ -1404,6 +2161,28 @@ begin
 
   if v_order.id is null then
     raise exception 'Unable to allocate a unique 6-digit order number (AK-XXXXXX). Please retry checkout.';
+  end if;
+
+  if v_chosen_offer.id is not null and v_calc_discount_inr > 0 then
+    insert into public.offer_redemptions (
+      offer_id,
+      order_id,
+      user_id,
+      coupon_code,
+      discount_inr
+    )
+    values (
+      v_chosen_offer.id,
+      v_order.id,
+      v_uid,
+      v_chosen_offer.coupon_code,
+      v_calc_discount_inr
+    );
+
+    update public.offers
+       set usage_count = usage_count + 1,
+           updated_at = pg_catalog.now()
+     where id = v_chosen_offer.id;
   end if;
 
   -- Insert server-resolved line items; each insert invokes order_items_decrement_stock trigger.
@@ -1451,10 +2230,10 @@ end;
 $$;
 
 revoke all on function public.create_order_atomic(
-  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text, text, integer
 ) from public, anon;
 grant execute on function public.create_order_atomic(
-  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text, text, integer
 ) to authenticated;
 
 create or replace function public.discard_incomplete_order(
@@ -1628,7 +2407,7 @@ begin
   )
     into v_owner_bypass;
 
-  foreach v_tbl in array array['orders', 'order_items', 'products']
+  foreach v_tbl in array array['orders', 'order_items', 'products', 'offers', 'offer_redemptions', 'storefront_banners']
   loop
     select c.relrowsecurity, c.relforcerowsecurity
       into v_rel
@@ -1675,16 +2454,18 @@ begin
     select 1
       from information_schema.role_table_grants g
      where g.table_schema = 'public'
-       and g.table_name in ('orders', 'order_items')
+       and g.table_name in ('orders', 'order_items', 'offer_redemptions')
        and g.grantee = 'PUBLIC'
        and g.privilege_type = 'INSERT'
   ) then
-    raise exception 'PUBLIC still has direct INSERT privilege on public.orders or public.order_items.';
+    raise exception 'PUBLIC still has direct INSERT privilege on public.orders, public.order_items, or public.offer_redemptions.';
   end if;
 
   foreach v_rpc_name in array array[
     'catalog_has_real_products',
     'decrement_stock_on_order_item',
+    'calculate_single_offer_discount_inr',
+    'preview_checkout_discount',
     'create_order_atomic',
     'discard_incomplete_order',
     'cancel_order'
@@ -1702,7 +2483,7 @@ begin
       raise exception 'Function public.%() is missing SECURITY DEFINER or set search_path = pg_catalog.', v_rpc_name;
     end if;
 
-    if v_rpc_name = 'catalog_has_real_products' then
+    if v_rpc_name in ('catalog_has_real_products', 'preview_checkout_discount') then
       if not pg_catalog.has_function_privilege('anon', v_fn.oid, 'EXECUTE')
          or not pg_catalog.has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
         raise exception 'Function public.%() must grant EXECUTE to anon and authenticated.', v_rpc_name;
@@ -1717,7 +2498,7 @@ begin
         raise exception 'Function public.%() must grant EXECUTE to authenticated.', v_rpc_name;
       end if;
 
-      if v_rpc_name in ('decrement_stock_on_order_item', 'discard_incomplete_order')
+      if v_rpc_name in ('decrement_stock_on_order_item', 'calculate_single_offer_discount_inr', 'discard_incomplete_order')
          and pg_catalog.has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
         raise exception 'Internal function public.%() must NOT grant EXECUTE to authenticated.', v_rpc_name;
       end if;

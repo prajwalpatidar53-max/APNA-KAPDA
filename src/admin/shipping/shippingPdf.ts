@@ -71,6 +71,43 @@ export function triggerPdfDownload(blob: Blob, filename: string): void {
   }, 1500);
 }
 
+export function triggerPdfPrint(blob: Blob): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '1px';
+  iframe.style.height = '1px';
+  iframe.style.opacity = '0';
+  iframe.style.pointerEvents = 'none';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.src = url;
+
+  const cleanup = () => {
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+      URL.revokeObjectURL(url);
+    }, 60_000);
+  };
+
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      // Fallback: browser blocked programmatic print inside iframe
+    } finally {
+      cleanup();
+    }
+  };
+
+  document.body.appendChild(iframe);
+}
+
 export async function generateBulkOrderSheetPdf(
   inputOrders: Order[],
   options: { fonts?: PdfFontBundle; generatedAt?: Date } = {}

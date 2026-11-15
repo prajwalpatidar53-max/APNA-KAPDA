@@ -469,7 +469,15 @@ export function AccountView({
                         {order.shipping_address.pincode}
                       </span>
 
-                      <div className="flex items-center gap-3 ml-auto">
+                      <div className="flex flex-wrap items-center gap-3 ml-auto">
+                        {(order.discount_inr ?? 0) > 0 && (
+                          <span className="text-[11px] text-[#2b6345] font-medium">
+                            {order.applied_coupon_code
+                              ? `Coupon ${order.applied_coupon_code}`
+                              : order.applied_offer_title || 'Offer'}{' '}
+                            (&minus;{formatINR(order.discount_inr ?? 0)})
+                          </span>
+                        )}
                         <span className="font-bold text-[#211f1b]">
                           Total: {formatINR(order.total_inr)}
                         </span>

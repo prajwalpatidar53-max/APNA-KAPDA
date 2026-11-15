@@ -22,6 +22,7 @@ import {
   generateBulkOrderSheetPdf,
   generateShippingLabelsPdf,
   triggerPdfDownload,
+  triggerPdfPrint,
 } from './shipping/shippingPdf';
 import {
   type AdminSenderConfig,
@@ -113,6 +114,14 @@ export function AdminBulkShipping({
   const [generatingType, setGeneratingType] = useState<'sheet' | 'labels' | null>(
     null
   );
+  const [pdfDeliveryMode, setPdfDeliveryMode] = useState<'download' | 'print'>(
+    'download'
+  );
+  const [lastGeneratedPdf, setLastGeneratedPdf] = useState<{
+    blob: Blob;
+    filename: string;
+    label: string;
+  } | null>(null);
   const [actionNotice, setActionNotice] = useState<{
     type: 'ok' | 'err' | 'warn';
     text: string;
@@ -240,14 +249,27 @@ export function AdminBulkShipping({
       const fonts = await loadBrowserPdfFonts();
       if (target === 'sheet') {
         const result = await generateBulkOrderSheetPdf(ordersToExport, { fonts });
-        triggerPdfDownload(result.blob, result.filename);
+        setLastGeneratedPdf({
+          blob: result.blob,
+          filename: result.filename,
+          label: `Bulk Order PDF (${result.orderCount} ${
+            result.orderCount === 1 ? 'order' : 'orders'
+          }, ${result.pageCount} ${result.pageCount === 1 ? 'page' : 'pages'})`,
+        });
+        if (pdfDeliveryMode === 'print') {
+          triggerPdfPrint(result.blob);
+        } else {
+          triggerPdfDownload(result.blob, result.filename);
+        }
         setActionNotice({
           type: 'ok',
-          text: `Downloaded Bulk Order PDF (${result.orderCount} ${
+          text: `${
+            pdfDeliveryMode === 'print' ? 'Prepared for printing' : 'Downloaded'
+          }: Bulk Order PDF (${result.orderCount} ${
             result.orderCount === 1 ? 'order' : 'orders'
           }, ${result.pageCount} ${
             result.pageCount === 1 ? 'page' : 'pages'
-          }). Remember to click "Mark Selected as Shipped" only after parcel handoff.`,
+          }). Order statuses remain unchanged.`,
         });
       } else {
         const result = await generateShippingLabelsPdf(
@@ -256,16 +278,29 @@ export function AdminBulkShipping({
           labelLayout,
           { fonts }
         );
-        triggerPdfDownload(result.blob, result.filename);
+        setLastGeneratedPdf({
+          blob: result.blob,
+          filename: result.filename,
+          label: `Shipping Labels (${result.orderCount} ${
+            result.orderCount === 1 ? 'label' : 'labels'
+          }, ${labelLayout === '4x6' ? '4 × 6 in' : 'A4 grid'})`,
+        });
+        if (pdfDeliveryMode === 'print') {
+          triggerPdfPrint(result.blob);
+        } else {
+          triggerPdfDownload(result.blob, result.filename);
+        }
         setActionNotice({
           type: 'ok',
-          text: `Downloaded Shipping Labels (${result.orderCount} ${
+          text: `${
+            pdfDeliveryMode === 'print' ? 'Prepared for printing' : 'Downloaded'
+          }: Shipping Labels (${result.orderCount} ${
             result.orderCount === 1 ? 'label' : 'labels'
           }, ${labelLayout === '4x6' ? '4 × 6 in' : 'A4 grid'}, ${
             result.pageCount
           } ${
             result.pageCount === 1 ? 'page' : 'pages'
-          }). Remember to click "Mark Selected as Shipped" only after dispatch.`,
+          }). Order statuses remain unchanged.`,
         });
       }
     } catch (err) {
@@ -395,10 +430,10 @@ export function AdminBulkShipping({
             Dispatch &amp; Packaging Workspace
           </p>
           <h1 className="font-serif-display text-2xl sm:text-3xl text-[#211f1b] mt-1">
-            Bulk Shipping Center
+            Shipping Center
           </h1>
           <p className="text-xs text-[#5f594f] mt-1">
-            Select verified customer orders, export print-ready order sheets or QR shipping labels, and confirm dispatch status.
+            Select verified customer orders, download or print Bulk Order Sheets and internal QR shipping labels, and confirm dispatch status.
           </p>
         </div>
 
@@ -802,6 +837,27 @@ export function AdminBulkShipping({
 
           <div>
             <label className="block text-[10px] tracking-[0.12em] uppercase text-[#817b70] mb-1">
+              Payment Method
+            </label>
+            <select
+              value={filters.paymentMethod}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  paymentMethod: e.target.value as ShippingFiltersState['paymentMethod'],
+                }))
+              }
+              aria-label="Filter shipping orders by payment method"
+              className="w-full px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+            >
+              <option value="all">All Payment Methods</option>
+              <option value="cod">Cash on Delivery (COD)</option>
+              <option value="online_pending">Online Payment</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] tracking-[0.12em] uppercase text-[#817b70] mb-1">
               Payment Status
             </label>
             <select
@@ -905,6 +961,31 @@ export function AdminBulkShipping({
             </button>
           </div>
 
+          <div className="flex items-center border border-[#e5dfd3] bg-[#f5f2eb]/60 p-0.5">
+            <button
+              type="button"
+              onClick={() => setPdfDeliveryMode('download')}
+              className={`px-3 py-1.5 text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+                pdfDeliveryMode === 'download'
+                  ? 'bg-[#24231f] text-white'
+                  : 'text-[#5f594f] hover:text-[#211f1b]'
+              }`}
+            >
+              Download PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => setPdfDeliveryMode('print')}
+              className={`px-3 py-1.5 text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+                pdfDeliveryMode === 'print'
+                  ? 'bg-[#24231f] text-white'
+                  : 'text-[#5f594f] hover:text-[#211f1b]'
+              }`}
+            >
+              Print PDF
+            </button>
+          </div>
+
           <button
             type="button"
             disabled={selectedOrders.length === 0 || generatingType !== null}
@@ -930,7 +1011,7 @@ export function AdminBulkShipping({
             ) : (
               <Printer className="w-3.5 h-3.5" />
             )}
-            <span>Download Shipping Labels</span>
+            <span>Generate Shipping Labels</span>
           </button>
 
           <button
@@ -948,7 +1029,7 @@ export function AdminBulkShipping({
       {actionNotice && (
         <div
           role="status"
-          className={`p-4 border text-xs flex items-start gap-2.5 ${
+          className={`p-4 border text-xs flex flex-wrap items-center justify-between gap-3 ${
             actionNotice.type === 'err'
               ? 'bg-[#fef2f2] border-[#fecaca] text-[#b91c1c]'
               : actionNotice.type === 'warn'
@@ -956,12 +1037,37 @@ export function AdminBulkShipping({
                 : 'bg-[#ecfdf5] border-[#a7f3d0] text-[#2b6345]'
           }`}
         >
-          {actionNotice.type === 'ok' ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5">
+            {actionNotice.type === 'ok' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            )}
+            <span>{actionNotice.text}</span>
+          </div>
+
+          {lastGeneratedPdf && actionNotice.type === 'ok' && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() =>
+                  triggerPdfDownload(lastGeneratedPdf.blob, lastGeneratedPdf.filename)
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#fffdf8] border border-[#2b6345] text-[#2b6345] text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-[#2b6345] hover:text-white transition-colors cursor-pointer"
+              >
+                <FileDown className="w-3 h-3" />
+                <span>Download</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerPdfPrint(lastGeneratedPdf.blob)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2b6345] text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-[#24231f] transition-colors cursor-pointer"
+              >
+                <Printer className="w-3 h-3" />
+                <span>Print</span>
+              </button>
+            </div>
           )}
-          <span>{actionNotice.text}</span>
         </div>
       )}
 
@@ -998,8 +1104,9 @@ export function AdminBulkShipping({
                         className="accent-[#24231f] w-3.5 h-3.5 cursor-pointer"
                       />
                     </th>
-                    <th className="py-3.5 px-3 font-semibold">Order #</th>
+                    <th className="py-3.5 px-3 font-semibold">Order # &amp; Date</th>
                     <th className="py-3.5 px-3 font-semibold">Customer &amp; Phone</th>
+                    <th className="py-3.5 px-3 font-semibold">City &amp; PIN</th>
                     <th className="py-3.5 px-3 font-semibold">Delivery Address</th>
                     <th className="py-3.5 px-3 font-semibold">Items</th>
                     <th className="py-3.5 px-3 font-semibold">Payment</th>
@@ -1064,7 +1171,16 @@ export function AdminBulkShipping({
                           </p>
                         </td>
 
-                        <td className="py-3.5 px-3 align-top max-w-[260px]">
+                        <td className="py-3.5 px-3 align-top whitespace-nowrap">
+                          <p className="font-medium text-[#211f1b]">
+                            {order.shipping_address?.city || '—'}
+                          </p>
+                          <p className="text-[11px] text-[#5f594f] mt-0.5 tabular-nums">
+                            PIN: {order.shipping_address?.pincode || '—'}
+                          </p>
+                        </td>
+
+                        <td className="py-3.5 px-3 align-top max-w-[230px]">
                           <p className="text-[11px] text-[#211f1b] leading-snug">
                             {streetLines.join(', ') || 'Missing street address'}
                           </p>

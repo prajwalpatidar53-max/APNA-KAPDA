@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Lock, ShieldCheck, Truck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lock, ShieldCheck, Tag, Truck, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   FREE_SHIPPING_THRESHOLD_INR,
@@ -8,10 +8,15 @@ import {
   isDemoProductId,
 } from '../data/catalog';
 import { isSupabaseConfigured } from '../lib/supabase';
-import { createOrder, updateUserProfile } from '../services/storeService';
+import {
+  createOrder,
+  previewCheckoutDiscount,
+  updateUserProfile,
+} from '../services/storeService';
 import { getAvailableStockForSize, getConfiguredSizes } from '../utils/inventory';
 import type {
   CartItem,
+  DiscountPreviewResult,
   Order,
   PaymentMethod,
   Product,
@@ -25,6 +30,8 @@ interface CheckoutViewProps {
   profile: UserProfile | null;
   cart: CartItem[];
   products: Product[];
+  appliedCouponCode?: string | null;
+  onCouponCodeChange?: (code: string | null) => void;
   onBack: () => void;
   onRequireAuth: () => void;
   onOrderCreated: (order: Order) => void;
@@ -51,6 +58,8 @@ export function CheckoutView({
   profile,
   cart,
   products,
+  appliedCouponCode: externalCouponCode,
+  onCouponCodeChange,
   onBack,
   onRequireAuth,
   onOrderCreated,
@@ -74,6 +83,23 @@ export function CheckoutView({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
+
+  const [localCouponCode, setLocalCouponCode] = useState<string | null>(
+    externalCouponCode ?? null
+  );
+  const activeCouponCode =
+    onCouponCodeChange !== undefined ? (externalCouponCode ?? null) : localCouponCode;
+
+  const setActiveCouponCode = (next: string | null) => {
+    setLocalCouponCode(next);
+    onCouponCodeChange?.(next);
+  };
+
+  const [couponInput, setCouponInput] = useState(activeCouponCode || '');
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [discountPreview, setDiscountPreview] =
+    useState<DiscountPreviewResult | null>(null);
 
   const isSubmittingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
@@ -99,6 +125,13 @@ export function CheckoutView({
     }
   }, [profile]);
 
+  const itemsWithProduct = cart
+    .map((item) => ({
+      ...item,
+      product: products.find((p) => p.id === item.productId),
+    }))
+    .filter((entry): entry is CartItem & { product: Product } => Boolean(entry.product));
+
   const cartSignature = useMemo(
     () =>
       cart
@@ -108,26 +141,99 @@ export function CheckoutView({
     [cart]
   );
 
-  useEffect(() => {
-    idempotencyKeyRef.current = generateIdempotencyKey();
-  }, [cartSignature, paymentMethod]);
-
-  const itemsWithProduct = cart
-    .map((item) => ({
-      ...item,
-      product: products.find((p) => p.id === item.productId),
-    }))
-    .filter((entry): entry is CartItem & { product: Product } => Boolean(entry.product));
-
-  const subtotal = itemsWithProduct.reduce(
+  const rawSubtotal = itemsWithProduct.reduce(
     (sum, item) => sum + item.product.price_inr * item.qty,
     0
   );
+
+  useEffect(() => {
+    if (placedOrder || itemsWithProduct.length === 0) {
+      setDiscountPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    void previewCheckoutDiscount({
+      items: itemsWithProduct.map((x) => ({
+        product_id: x.product.id,
+        quantity: x.qty,
+        unit_price_inr: x.product.price_inr,
+      })),
+      couponCode: activeCouponCode,
+    }).then((res) => {
+      if (cancelled) return;
+      if (activeCouponCode && !res.valid) {
+        setCouponError(res.message || `Coupon "${activeCouponCode}" is no longer valid.`);
+        setActiveCouponCode(null);
+        return;
+      }
+      setDiscountPreview(res);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartSignature, activeCouponCode, user?.id, placedOrder]);
+
+  const subtotal = discountPreview?.subtotal_inr ?? rawSubtotal;
+  const discountInr =
+    discountPreview && discountPreview.valid ? discountPreview.discount_inr : 0;
+  const discountedSubtotal = Math.max(0, subtotal - discountInr);
   const shippingFee =
-    subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD_INR
-      ? 0
-      : STANDARD_SHIPPING_FEE_INR;
-  const total = subtotal + shippingFee;
+    discountPreview && discountPreview.valid
+      ? discountPreview.shipping_inr
+      : subtotal === 0 || discountedSubtotal >= FREE_SHIPPING_THRESHOLD_INR
+        ? 0
+        : STANDARD_SHIPPING_FEE_INR;
+  const total =
+    discountPreview && discountPreview.valid
+      ? discountPreview.total_inr
+      : discountedSubtotal + shippingFee;
+
+  useEffect(() => {
+    idempotencyKeyRef.current = generateIdempotencyKey();
+  }, [cartSignature, paymentMethod, activeCouponCode, discountInr]);
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) {
+      setCouponError('Enter a coupon code to apply.');
+      return;
+    }
+    if (itemsWithProduct.length === 0) {
+      setCouponError('Add items to your bag before applying a coupon.');
+      return;
+    }
+
+    setCouponApplying(true);
+    setCouponError('');
+
+    const preview = await previewCheckoutDiscount({
+      items: itemsWithProduct.map((x) => ({
+        product_id: x.product.id,
+        quantity: x.qty,
+        unit_price_inr: x.product.price_inr,
+      })),
+      couponCode: code,
+    });
+
+    setCouponApplying(false);
+
+    if (!preview.valid || preview.discount_inr <= 0) {
+      setCouponError(preview.message || `Coupon "${code}" cannot be applied.`);
+      return;
+    }
+
+    setCouponInput(preview.applied_coupon_code || code);
+    setActiveCouponCode(preview.applied_coupon_code || code);
+    setDiscountPreview(preview);
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponError('');
+    setCouponInput('');
+    setActiveCouponCode(null);
+  };
 
   if (placedOrder) {
     const confirmedItems = placedOrder.order_items ?? [];
@@ -228,6 +334,18 @@ export function CheckoutView({
                   <span>Subtotal</span>
                   <span>{formatINR(placedOrder.subtotal_inr)}</span>
                 </div>
+                {(placedOrder.discount_inr ?? 0) > 0 && (
+                  <div className="flex justify-between text-[#2b6345]">
+                    <span>
+                      Discount (
+                      {placedOrder.applied_coupon_code
+                        ? `Coupon ${placedOrder.applied_coupon_code}`
+                        : placedOrder.applied_offer_title || 'Offer'}
+                      )
+                    </span>
+                    <span>&minus;{formatINR(placedOrder.discount_inr ?? 0)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[#5f594f]">
                   <span>Shipping</span>
                   <span>
@@ -404,6 +522,8 @@ export function CheckoutView({
         subtotalInr: subtotal,
         shippingInr: shippingFee,
         totalInr: total,
+        couponCode: activeCouponCode,
+        discountInr: discountInr,
         notes: notes.trim(),
         idempotencyKey: idempotencyKeyRef.current,
         items: itemsWithProduct.map((entry) => ({
@@ -711,11 +831,106 @@ export function CheckoutView({
             ))}
           </div>
 
+          {/* Coupon Code & Automatic Offer Box */}
+          <div className="border-t border-[#e5dfd3] pt-4 pb-4 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.16em] uppercase font-bold text-[#5f594f]">
+                <Tag className="w-3.5 h-3.5 text-[#9a6746]" />
+                <span>Promo / Coupon Code</span>
+              </span>
+              {activeCouponCode && (
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  className="text-[10px] tracking-[0.12em] uppercase text-[#9a3b26] hover:underline cursor-pointer"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            {activeCouponCode ? (
+              <div className="p-2.5 bg-[#ecfdf5] border border-[#a7f3d0] text-[#2b6345] flex items-center justify-between gap-2">
+                <span className="font-mono font-bold text-[11px]">
+                  {activeCouponCode}
+                  {discountPreview?.applied_offer_title
+                    ? ` · ${discountPreview.applied_offer_title}`
+                    : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  aria-label="Remove coupon code"
+                  className="text-[#2b6345] hover:text-[#211f1b] cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => {
+                    setCouponInput(e.target.value.toUpperCase());
+                    if (couponError) setCouponError('');
+                  }}
+                  placeholder="Enter code (e.g. WELCOME10)"
+                  className="flex-1 px-3 py-2 border border-[#e5dfd3] bg-[#fffdf8] text-xs font-mono uppercase outline-none focus:border-[#9a6746]"
+                />
+                <button
+                  type="button"
+                  disabled={couponApplying || itemsWithProduct.length === 0}
+                  onClick={handleApplyCoupon}
+                  className="px-4 py-2 border border-[#24231f] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#211f1b] hover:bg-[#24231f] hover:text-white transition-colors cursor-pointer disabled:opacity-45"
+                >
+                  {couponApplying ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+            )}
+
+            {couponError && (
+              <p className="text-[11px] text-[#9a3b26] leading-relaxed">
+                {couponError}
+              </p>
+            )}
+
+            {!activeCouponCode &&
+              discountPreview?.valid &&
+              discountPreview.discount_inr > 0 &&
+              discountPreview.applied_offer_title && (
+                <p className="text-[11px] text-[#2b6345] bg-[#ecfdf5] border border-[#a7f3d0] px-2.5 py-1.5">
+                  Automatic offer applied:{' '}
+                  <strong>{discountPreview.applied_offer_title}</strong> (&minus;
+                  {formatINR(discountPreview.discount_inr)})
+                </p>
+              )}
+
+            {discountInr > 0 && (
+              <p className="text-[10px] text-[#817b70]">
+                Single best offer policy: offers &amp; coupon codes cannot be stacked.
+              </p>
+            )}
+          </div>
+
           <div className="border-t border-[#e5dfd3] pt-4 space-y-2.5 text-xs tabular-nums">
             <div className="flex justify-between text-[#5f594f]">
               <span>Subtotal</span>
               <span>{formatINR(subtotal)}</span>
             </div>
+            {discountInr > 0 && (
+              <div className="flex justify-between text-[#2b6345] font-medium">
+                <span>
+                  Discount
+                  {discountPreview?.applied_coupon_code
+                    ? ` (${discountPreview.applied_coupon_code})`
+                    : discountPreview?.applied_offer_title
+                      ? ` (${discountPreview.applied_offer_title})`
+                      : ''}
+                </span>
+                <span>&minus;{formatINR(discountInr)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-[#5f594f]">
               <span>Shipping</span>
               <span>

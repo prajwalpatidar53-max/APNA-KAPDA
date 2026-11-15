@@ -16,6 +16,7 @@ import { isSupabaseConfigured, supabase, SUPABASE_URL } from './lib/supabase';
 import {
   type CatalogFetchResult,
   fetchActiveProducts,
+  fetchActiveStorefrontBanner,
   fetchUserProfile,
 } from './services/storeService';
 import {
@@ -29,6 +30,7 @@ import type {
   CartItem,
   CategoryFilter,
   Product,
+  StorefrontBanner,
   UserProfile,
 } from './types';
 
@@ -59,6 +61,8 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authNotice, setAuthNotice] = useState('');
+  const [activeBanner, setActiveBanner] = useState<StorefrontBanner | null>(null);
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
 
   const applyCatalogResult = useCallback((res: CatalogFetchResult) => {
     setProducts(res.products);
@@ -83,8 +87,12 @@ export default function App() {
 
   const loadCatalog = useCallback(async () => {
     setLoadingProducts(true);
-    const res = await fetchActiveProducts();
+    const [res, bannerRes] = await Promise.all([
+      fetchActiveProducts(),
+      fetchActiveStorefrontBanner(),
+    ]);
     applyCatalogResult(res);
+    setActiveBanner(bannerRes.banner);
     setLoadingProducts(false);
   }, [applyCatalogResult]);
 
@@ -178,6 +186,28 @@ export default function App() {
   const handleOpenProduct = (product: Product) => {
     setSelectedProduct(product);
     setActiveView('product');
+  };
+
+  const handleBannerCtaClick = (banner: StorefrontBanner) => {
+    const val = banner.destination_value.trim();
+    if (banner.destination_type === 'category') {
+      if (val === 'Men' || val === 'Women' || val === 'Unisex' || val === 'All') {
+        handleSelectCategory(val);
+        return;
+      }
+    } else if (banner.destination_type === 'product' && val) {
+      const target = products.find((p) => p.id === val || p.slug === val);
+      if (target) {
+        handleOpenProduct(target);
+        return;
+      }
+    } else if (banner.destination_type === 'url' && val) {
+      if (val.startsWith('#')) {
+        navigateView('storefront', val.slice(1));
+        return;
+      }
+    }
+    navigateView('storefront', 'shop');
   };
 
   const handleAddToCart = (product: Product, size?: string, qty = 1) => {
@@ -290,6 +320,8 @@ export default function App() {
         onOpenAuth={() => handleOpenAuth('login')}
         user={user}
         profile={profile}
+        activeBanner={activeBanner}
+        onBannerCtaClick={handleBannerCtaClick}
       />
 
       <main className="flex-1">
@@ -325,12 +357,15 @@ export default function App() {
             profile={profile}
             cart={cart}
             products={products}
+            appliedCouponCode={appliedCouponCode}
+            onCouponCodeChange={setAppliedCouponCode}
             onBack={() => navigateView('storefront', 'shop')}
             onRequireAuth={() =>
               handleOpenAuth('login', 'Sign in or create an account to place your order.')
             }
             onOrderCreated={() => {
               setCart([]);
+              setAppliedCouponCode(null);
               void loadCatalog();
             }}
             onViewOrders={() => navigateView('account')}
@@ -356,6 +391,7 @@ export default function App() {
         onClose={() => setCartOpen(false)}
         cart={cart}
         products={products}
+        appliedCouponCode={appliedCouponCode}
         onChangeQty={handleChangeCartQty}
         onRemoveItem={handleRemoveCartItem}
         onProceedToCheckout={handleProceedToCheckout}

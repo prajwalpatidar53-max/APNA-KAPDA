@@ -9,6 +9,7 @@ import {
   Package,
   RefreshCw,
   ShoppingBag,
+  Tag,
   Truck,
   Users,
   X,
@@ -19,6 +20,7 @@ import { AdminAnalytics } from './AdminAnalytics';
 import { AdminBulkShipping } from './AdminBulkShipping';
 import { AdminCustomers } from './AdminCustomers';
 import { AdminLogin } from './AdminLogin';
+import { AdminOffers } from './AdminOffers';
 import { AdminOrders } from './AdminOrders';
 import { AdminProducts } from './AdminProducts';
 import {
@@ -36,6 +38,7 @@ type AdminTab =
   | 'products'
   | 'orders'
   | 'bulk-shipping'
+  | 'offers'
   | 'customers'
   | 'setup';
 
@@ -208,7 +211,8 @@ export default function AdminPortal() {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'products', label: 'Products', icon: Package, count: products.length },
     { id: 'orders', label: 'Orders', icon: ShoppingBag, count: orders.length },
-    { id: 'bulk-shipping', label: 'Bulk Shipping', icon: Truck, count: readyToShipCount },
+    { id: 'bulk-shipping', label: 'Shipping Center', icon: Truck, count: readyToShipCount },
+    { id: 'offers', label: 'Offers & Coupons', icon: Tag },
     { id: 'customers', label: 'Customers', icon: Users, count: customers.length },
     { id: 'setup', label: 'SQL & Deploy', icon: Database },
   ];
@@ -386,6 +390,13 @@ export default function AdminPortal() {
               loading={loadingData}
               onRefresh={loadAllAdminData}
               onInspectOrder={handleInspectOrder}
+            />
+          )}
+
+          {activeTab === 'offers' && (
+            <AdminOffers
+              products={products}
+              onDataChanged={loadAllAdminData}
             />
           )}
 
