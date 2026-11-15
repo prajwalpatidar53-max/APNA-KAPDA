@@ -604,3 +604,197 @@ export async function fetchAdminCustomers(): Promise<{
     customers: ((data ?? []) as Record<string, unknown>[]).map(mapProfileRow),
   };
 }
+
+export interface BulkMarkShippedResult {
+  updatedIds: string[];
+  skippedCancelledCount: number;
+  skippedDeliveredCount: number;
+  skippedAlreadyShippedCount: number;
+  error?: string;
+}
+
+const BULK_SHIPPABLE_STATUSES: readonly OrderStatus[] = [
+  'pending',
+  'confirmed',
+  'packed',
+];
+
+export async function bulkMarkOrdersShippedAdmin(
+  orderIds: string[]
+): Promise<BulkMarkShippedResult> {
+  const uniqueIds = Array.from(
+    new Set(orderIds.map((id) => id.trim()).filter(Boolean))
+  );
+
+  if (uniqueIds.length === 0) {
+    return {
+      updatedIds: [],
+      skippedCancelledCount: 0,
+      skippedDeliveredCount: 0,
+      skippedAlreadyShippedCount: 0,
+      error: 'Select at least one order to mark as shipped.',
+    };
+  }
+
+  if (!supabase || !isSupabaseConfigured) {
+    return {
+      updatedIds: [],
+      skippedCancelledCount: 0,
+      skippedDeliveredCount: 0,
+      skippedAlreadyShippedCount: 0,
+      error: 'Supabase is not configured.',
+    };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return {
+      updatedIds: [],
+      skippedCancelledCount: 0,
+      skippedDeliveredCount: 0,
+      skippedAlreadyShippedCount: 0,
+      error:
+        session.status === 'forbidden'
+          ? session.reason || 'Administrator privileges are required.'
+          : 'Administrator authentication required.',
+    };
+  }
+
+  const { data: currentRows, error: fetchError } = await supabase
+    .from('orders')
+    .select('id, order_status')
+    .in('id', uniqueIds);
+
+  if (fetchError) {
+    logAdminError('bulkMarkOrdersShippedAdmin.fetch', 'orders', fetchError);
+    return {
+      updatedIds: [],
+      skippedCancelledCount: 0,
+      skippedDeliveredCount: 0,
+      skippedAlreadyShippedCount: 0,
+      error: fetchError.message,
+    };
+  }
+
+  const rows = (currentRows ?? []) as { id: string; order_status: OrderStatus }[];
+  const eligibleIds: string[] = [];
+  let skippedCancelledCount = 0;
+  let skippedDeliveredCount = 0;
+  let skippedAlreadyShippedCount = 0;
+
+  for (const row of rows) {
+    if (BULK_SHIPPABLE_STATUSES.includes(row.order_status)) {
+      eligibleIds.push(row.id);
+    } else if (row.order_status === 'cancelled') {
+      skippedCancelledCount += 1;
+    } else if (row.order_status === 'delivered') {
+      skippedDeliveredCount += 1;
+    } else if (row.order_status === 'shipped') {
+      skippedAlreadyShippedCount += 1;
+    }
+  }
+
+  if (eligibleIds.length === 0) {
+    return {
+      updatedIds: [],
+      skippedCancelledCount,
+      skippedDeliveredCount,
+      skippedAlreadyShippedCount,
+    };
+  }
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('orders')
+    .update({
+      order_status: 'shipped',
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', eligibleIds)
+    .in('order_status', [...BULK_SHIPPABLE_STATUSES])
+    .select('id');
+
+  if (updateError) {
+    logAdminError('bulkMarkOrdersShippedAdmin.update', 'orders', updateError);
+    return {
+      updatedIds: [],
+      skippedCancelledCount,
+      skippedDeliveredCount,
+      skippedAlreadyShippedCount,
+      error: updateError.message,
+    };
+  }
+
+  return {
+    updatedIds: ((updatedRows ?? []) as { id: string }[]).map((r) => r.id),
+    skippedCancelledCount,
+    skippedDeliveredCount,
+    skippedAlreadyShippedCount,
+  };
+}
+
+export async function updateAdminOrderDelivery(
+  orderId: string,
+  updates: {
+    customer_name: string;
+    customer_phone: string;
+    shipping_address: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      pincode: string;
+    };
+  }
+): Promise<{ error?: string }> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return { error: 'Administrator privileges are required.' };
+  }
+
+  const cleanName = updates.customer_name.trim();
+  const cleanPhone = updates.customer_phone.trim();
+  const cleanLine1 = updates.shipping_address.line1.trim();
+  const cleanLine2 = (updates.shipping_address.line2 ?? '').trim();
+  const cleanCity = updates.shipping_address.city.trim();
+  const cleanState = updates.shipping_address.state.trim();
+  const cleanPincode = updates.shipping_address.pincode.trim();
+
+  if (cleanName.length < 2) return { error: 'Customer name is required.' };
+  if (cleanPhone.replace(/\D/g, '').length < 10) {
+    return { error: 'Valid 10-digit customer phone is required.' };
+  }
+  if (!cleanLine1 || !cleanCity || !cleanState || !/^\d{6}$/.test(cleanPincode)) {
+    return {
+      error:
+        'Complete address (Line 1, City, State, and 6-digit PIN code) is required.',
+    };
+  }
+
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      customer_name: cleanName,
+      customer_phone: cleanPhone,
+      shipping_address: {
+        line1: cleanLine1,
+        ...(cleanLine2 ? { line2: cleanLine2 } : {}),
+        city: cleanCity,
+        state: cleanState,
+        pincode: cleanPincode,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', orderId);
+
+  if (error) {
+    logAdminError('updateAdminOrderDelivery', 'orders', error);
+    return { error: error.message };
+  }
+  return {};
+}
+
+

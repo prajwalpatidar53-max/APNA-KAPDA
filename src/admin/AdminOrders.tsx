@@ -15,6 +15,7 @@ import type { Order, OrderStatus, PaymentStatus, Product } from '../types';
 import {
   cancelOrderAdmin,
   updateAdminOrder,
+  updateAdminOrderDelivery,
 } from './adminService';
 
 interface AdminOrdersProps {
@@ -153,6 +154,18 @@ export function AdminOrders({
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
 
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  const [deliveryDraft, setDeliveryDraft] = useState({
+    customer_name: '',
+    customer_phone: '',
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    pincode: '',
+  });
+
   useEffect(() => {
     if (initialOrderId) {
       const found = orders.find((o) => o.id === initialOrderId);
@@ -194,6 +207,16 @@ export function AdminOrders({
     setSelectedOrder(order);
     setEditOrderStatus(order.order_status);
     setEditPaymentStatus(order.payment_status);
+    setEditingDelivery(false);
+    setDeliveryDraft({
+      customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      line1: order.shipping_address?.line1 || '',
+      line2: order.shipping_address?.line2 || '',
+      city: order.shipping_address?.city || '',
+      state: order.shipping_address?.state || '',
+      pincode: order.shipping_address?.pincode || '',
+    });
     setFeedback(null);
   };
 
@@ -612,45 +635,179 @@ export function AdminOrders({
               </div>
 
               {/* Customer & Shipping Address */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="border border-[#e5dfd3] p-4">
-                  <div className="flex items-center gap-2 text-[#9a6746] mb-2">
-                    <User className="w-3.5 h-3.5" />
-                    <span className="text-[10px] tracking-[0.16em] uppercase font-bold">
-                      Customer
-                    </span>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="border border-[#e5dfd3] p-4">
+                    <div className="flex items-center gap-2 text-[#9a6746] mb-2">
+                      <User className="w-3.5 h-3.5" />
+                      <span className="text-[10px] tracking-[0.16em] uppercase font-bold">
+                        Customer
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-[#211f1b]">
+                      {selectedOrder.customer_name}
+                    </p>
+                    <p className="text-xs text-[#5f594f] mt-1">
+                      {selectedOrder.customer_email}
+                    </p>
+                    <p className="text-xs text-[#5f594f] mt-0.5 tabular-nums">
+                      {selectedOrder.customer_phone}
+                    </p>
                   </div>
-                  <p className="text-xs font-semibold text-[#211f1b]">
-                    {selectedOrder.customer_name}
-                  </p>
-                  <p className="text-xs text-[#5f594f] mt-1">
-                    {selectedOrder.customer_email}
-                  </p>
-                  <p className="text-xs text-[#5f594f] mt-0.5 tabular-nums">
-                    {selectedOrder.customer_phone}
-                  </p>
+
+                  <div className="border border-[#e5dfd3] p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 text-[#9a6746]">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="text-[10px] tracking-[0.16em] uppercase font-bold">
+                          Shipping Address
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingDelivery((v) => !v);
+                          setDeliveryDraft({
+                            customer_name: selectedOrder.customer_name || '',
+                            customer_phone: selectedOrder.customer_phone || '',
+                            line1: selectedOrder.shipping_address?.line1 || '',
+                            line2: selectedOrder.shipping_address?.line2 || '',
+                            city: selectedOrder.shipping_address?.city || '',
+                            state: selectedOrder.shipping_address?.state || '',
+                            pincode: selectedOrder.shipping_address?.pincode || '',
+                          });
+                        }}
+                        className="text-[10px] tracking-[0.12em] uppercase font-semibold text-[#9a6746] hover:text-[#211f1b] cursor-pointer"
+                      >
+                        {editingDelivery ? 'Cancel Edit' : 'Edit'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-[#211f1b] leading-relaxed">
+                      {selectedOrder.shipping_address.line1}
+                      {selectedOrder.shipping_address.line2
+                        ? `, ${selectedOrder.shipping_address.line2}`
+                        : ''}
+                      <br />
+                      {selectedOrder.shipping_address.city},{' '}
+                      {selectedOrder.shipping_address.state} &ndash;{' '}
+                      <span className="tabular-nums">
+                        {selectedOrder.shipping_address.pincode}
+                      </span>
+                    </p>
+                  </div>
                 </div>
 
-                <div className="border border-[#e5dfd3] p-4">
-                  <div className="flex items-center gap-2 text-[#9a6746] mb-2">
-                    <MapPin className="w-3.5 h-3.5" />
-                    <span className="text-[10px] tracking-[0.16em] uppercase font-bold">
-                      Shipping Address
-                    </span>
+                {editingDelivery && (
+                  <div className="border border-[#d6c2a8] bg-[#f9f4ec] p-4 space-y-3">
+                    <p className="text-[10px] tracking-[0.16em] uppercase font-bold text-[#9a6746]">
+                      Fix Customer Contact / Delivery Address
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <input
+                        type="text"
+                        value={deliveryDraft.customer_name}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, customer_name: e.target.value }))
+                        }
+                        placeholder="Customer Name *"
+                        className="px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="tel"
+                        value={deliveryDraft.customer_phone}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, customer_phone: e.target.value }))
+                        }
+                        placeholder="Phone (10 digits) *"
+                        className="px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={deliveryDraft.line1}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, line1: e.target.value }))
+                        }
+                        placeholder="Address Line 1 *"
+                        className="sm:col-span-2 px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={deliveryDraft.line2}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, line2: e.target.value }))
+                        }
+                        placeholder="Address Line 2 (Optional)"
+                        className="sm:col-span-2 px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={deliveryDraft.city}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, city: e.target.value }))
+                        }
+                        placeholder="City *"
+                        className="px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={deliveryDraft.state}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({ ...d, state: e.target.value }))
+                        }
+                        placeholder="State *"
+                        className="px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none"
+                      />
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={deliveryDraft.pincode}
+                        onChange={(e) =>
+                          setDeliveryDraft((d) => ({
+                            ...d,
+                            pincode: e.target.value.replace(/\D/g, '').slice(0, 6),
+                          }))
+                        }
+                        placeholder="6-digit PIN Code *"
+                        className="px-3 py-2 bg-[#fffdf8] border border-[#e5dfd3] outline-none tabular-nums"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={savingDelivery}
+                        onClick={async () => {
+                          setSavingDelivery(true);
+                          setFeedback(null);
+                          const res = await updateAdminOrderDelivery(selectedOrder.id, {
+                            customer_name: deliveryDraft.customer_name,
+                            customer_phone: deliveryDraft.customer_phone,
+                            shipping_address: {
+                              line1: deliveryDraft.line1,
+                              line2: deliveryDraft.line2,
+                              city: deliveryDraft.city,
+                              state: deliveryDraft.state,
+                              pincode: deliveryDraft.pincode,
+                            },
+                          });
+                          setSavingDelivery(false);
+                          if (res.error) {
+                            setFeedback({ type: 'err', text: res.error });
+                            return;
+                          }
+                          setEditingDelivery(false);
+                          setFeedback({
+                            type: 'ok',
+                            text: `Saved delivery details for ${selectedOrder.order_number}.`,
+                          });
+                          await onRefresh();
+                        }}
+                        className="px-4 py-2 bg-[#24231f] text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-[#9a6746] cursor-pointer disabled:opacity-50"
+                      >
+                        {savingDelivery ? 'Saving...' : 'Save Delivery Details'}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#211f1b] leading-relaxed">
-                    {selectedOrder.shipping_address.line1}
-                    {selectedOrder.shipping_address.line2
-                      ? `, ${selectedOrder.shipping_address.line2}`
-                      : ''}
-                    <br />
-                    {selectedOrder.shipping_address.city},{' '}
-                    {selectedOrder.shipping_address.state} &ndash;{' '}
-                    <span className="tabular-nums">
-                      {selectedOrder.shipping_address.pincode}
-                    </span>
-                  </p>
-                </div>
+                )}
               </div>
 
               {/* Ordered Items */}

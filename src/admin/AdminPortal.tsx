@@ -9,12 +9,14 @@ import {
   Package,
   RefreshCw,
   ShoppingBag,
+  Truck,
   Users,
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Order, Product, UserProfile } from '../types';
 import { AdminAnalytics } from './AdminAnalytics';
+import { AdminBulkShipping } from './AdminBulkShipping';
 import { AdminCustomers } from './AdminCustomers';
 import { AdminLogin } from './AdminLogin';
 import { AdminOrders } from './AdminOrders';
@@ -27,8 +29,15 @@ import {
   signOutAdmin,
   verifyAdminSession,
 } from './adminService';
+import { computeShippingStats } from './shipping/shippingUtils';
 
-type AdminTab = 'overview' | 'products' | 'orders' | 'customers' | 'setup';
+type AdminTab =
+  | 'overview'
+  | 'products'
+  | 'orders'
+  | 'bulk-shipping'
+  | 'customers'
+  | 'setup';
 
 const ADMIN_MIGRATION_SQL = `-- Run in Supabase SQL Editor (non-destructive)
 alter table public.products
@@ -193,10 +202,13 @@ export default function AdminPortal() {
     );
   }
 
+  const readyToShipCount = computeShippingStats(orders).readyToShipOrders;
+
   const navItems: { id: AdminTab; label: string; icon: typeof BarChart3; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'products', label: 'Products', icon: Package, count: products.length },
     { id: 'orders', label: 'Orders', icon: ShoppingBag, count: orders.length },
+    { id: 'bulk-shipping', label: 'Bulk Shipping', icon: Truck, count: readyToShipCount },
     { id: 'customers', label: 'Customers', icon: Users, count: customers.length },
     { id: 'setup', label: 'SQL & Deploy', icon: Database },
   ];
@@ -365,6 +377,15 @@ export default function AdminPortal() {
               initialOrderId={inspectOrderId}
               onClearInitialOrder={() => setInspectOrderId(null)}
               onRefresh={loadAllAdminData}
+            />
+          )}
+
+          {activeTab === 'bulk-shipping' && (
+            <AdminBulkShipping
+              orders={orders}
+              loading={loadingData}
+              onRefresh={loadAllAdminData}
+              onInspectOrder={handleInspectOrder}
             />
           )}
 
