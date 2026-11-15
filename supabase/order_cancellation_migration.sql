@@ -7,10 +7,11 @@
 -- Run in: Supabase Dashboard -> SQL Editor -> New Query
 -- ============================================================================
 
--- 0a. Verify required baseline tables and columns exist before migrating
+-- 0a. Verify all baseline tables, columns, and column types required by migration & RPCs
 do $$
 declare
   v_missing text;
+  v_type_mismatch text;
 begin
   select pg_catalog.string_agg(req.tbl || '.' || req.col, ', ' order by req.tbl, req.col)
     into v_missing
@@ -20,16 +21,25 @@ begin
         ('products', 'slug'),
         ('products', 'name'),
         ('products', 'price_inr'),
+        ('products', 'sizes'),
         ('products', 'stock_count'),
+        ('products', 'image_url'),
         ('products', 'is_active'),
+        ('products', 'updated_at'),
         ('orders', 'id'),
+        ('orders', 'order_number'),
         ('orders', 'user_id'),
-        ('orders', 'order_status'),
-        ('orders', 'payment_status'),
+        ('orders', 'customer_name'),
+        ('orders', 'customer_email'),
+        ('orders', 'customer_phone'),
+        ('orders', 'shipping_address'),
         ('orders', 'payment_method'),
+        ('orders', 'payment_status'),
+        ('orders', 'order_status'),
         ('orders', 'subtotal_inr'),
         ('orders', 'shipping_inr'),
         ('orders', 'total_inr'),
+        ('orders', 'notes'),
         ('orders', 'created_at'),
         ('orders', 'updated_at'),
         ('order_items', 'id'),
@@ -37,6 +47,7 @@ begin
         ('order_items', 'product_uuid'),
         ('order_items', 'product_id'),
         ('order_items', 'product_name'),
+        ('order_items', 'product_image'),
         ('order_items', 'selected_size'),
         ('order_items', 'unit_price_inr'),
         ('order_items', 'quantity'),
@@ -54,6 +65,70 @@ begin
     raise exception
       'Baseline schema is missing required table/column(s): %. Run supabase/schema.sql first or verify existing schema before applying this migration.',
       v_missing;
+  end if;
+
+  select pg_catalog.string_agg(
+           req.tbl || '.' || req.col || ' (found ' || c.data_type || '/' || c.udt_name || ', expected ' || req.kind || ')',
+           ', '
+           order by req.tbl, req.col
+         )
+    into v_type_mismatch
+    from (
+      values
+        ('products', 'id', 'uuid'),
+        ('products', 'slug', 'text'),
+        ('products', 'name', 'text'),
+        ('products', 'price_inr', 'int'),
+        ('products', 'sizes', 'text_array'),
+        ('products', 'stock_count', 'int'),
+        ('products', 'image_url', 'text'),
+        ('products', 'is_active', 'bool'),
+        ('products', 'updated_at', 'timestamptz'),
+        ('orders', 'id', 'uuid'),
+        ('orders', 'order_number', 'text'),
+        ('orders', 'user_id', 'uuid'),
+        ('orders', 'customer_name', 'text'),
+        ('orders', 'customer_email', 'text'),
+        ('orders', 'customer_phone', 'text'),
+        ('orders', 'shipping_address', 'jsonb'),
+        ('orders', 'payment_method', 'text'),
+        ('orders', 'payment_status', 'text'),
+        ('orders', 'order_status', 'text'),
+        ('orders', 'subtotal_inr', 'int'),
+        ('orders', 'shipping_inr', 'int'),
+        ('orders', 'total_inr', 'int'),
+        ('orders', 'notes', 'text'),
+        ('orders', 'created_at', 'timestamptz'),
+        ('orders', 'updated_at', 'timestamptz'),
+        ('order_items', 'id', 'uuid'),
+        ('order_items', 'order_id', 'uuid'),
+        ('order_items', 'product_uuid', 'uuid'),
+        ('order_items', 'product_id', 'text'),
+        ('order_items', 'product_name', 'text'),
+        ('order_items', 'product_image', 'text'),
+        ('order_items', 'selected_size', 'text'),
+        ('order_items', 'unit_price_inr', 'int'),
+        ('order_items', 'quantity', 'int'),
+        ('order_items', 'created_at', 'timestamptz')
+    ) as req(tbl, col, kind)
+    join information_schema.columns c
+      on c.table_schema = 'public'
+     and c.table_name = req.tbl
+     and c.column_name = req.col
+   where not (
+     (req.kind = 'uuid' and c.data_type = 'uuid')
+     or (req.kind = 'text' and c.data_type in ('text', 'character varying'))
+     or (req.kind = 'int' and c.data_type in ('integer', 'smallint', 'bigint'))
+     or (req.kind = 'bool' and c.data_type = 'boolean')
+     or (req.kind = 'jsonb' and c.data_type = 'jsonb')
+     or (req.kind = 'timestamptz' and c.data_type in ('timestamp with time zone', 'timestamp without time zone'))
+     or (req.kind = 'text_array' and c.data_type = 'ARRAY' and c.udt_name in ('_text', '_varchar'))
+   );
+
+  if v_type_mismatch is not null then
+    raise exception
+      'Baseline schema has incompatible column type(s): %. Align column types before applying this migration.',
+      v_type_mismatch;
   end if;
 end $$;
 
@@ -155,6 +230,13 @@ alter table public.orders
 alter table public.orders
   add column if not exists refund_status text not null default 'none';
 
+alter table public.orders
+  add column if not exists idempotency_key text;
+
+create unique index if not exists orders_user_idempotency_key_idx
+  on public.orders (user_id, idempotency_key)
+  where idempotency_key is not null;
+
 alter table public.order_items
   add column if not exists stock_deducted boolean not null default false;
 
@@ -167,14 +249,62 @@ alter table public.order_items
 alter table public.order_items
   add column if not exists stock_restoration_error text;
 
--- 3. Safely validate existing rows and migrate ONLY target CHECK constraints.
---    - Preserves all unrelated CHECK constraints (including those mentioning target columns
---      in unrelated guards such as `(order_status <> 'delivered') OR (...)`).
+alter table public.order_items
+  add column if not exists stock_tracking_mode text not null default 'legacy';
+
+-- 2b. Verify a single-column non-partial UNIQUE index/constraint exists on public.orders(order_number)
+do $$
+declare
+  v_has_unique_order_number boolean;
+  v_dup_order_numbers text;
+begin
+  select exists (
+    select 1
+      from pg_catalog.pg_index idx
+      join pg_catalog.pg_class rel on rel.oid = idx.indrelid
+      join pg_catalog.pg_namespace nsp on nsp.oid = rel.relnamespace
+      join pg_catalog.pg_attribute att
+        on att.attrelid = rel.oid
+       and att.attnum = idx.indkey[0]
+     where nsp.nspname = 'public'
+       and rel.relname = 'orders'
+       and idx.indisunique
+       and idx.indisvalid
+       and idx.indnatts = 1
+       and idx.indpred is null
+       and att.attname = 'order_number'
+       and not att.attisdropped
+  )
+    into v_has_unique_order_number;
+
+  if not v_has_unique_order_number then
+    select pg_catalog.string_agg(dup_num, ', ')
+      into v_dup_order_numbers
+      from (
+        select coalesce(order_number, '<NULL>') as dup_num
+          from public.orders
+         group by order_number
+        having pg_catalog.count(*) > 1
+         limit 10
+      ) d;
+
+    if v_dup_order_numbers is not null then
+      raise exception
+        'Cannot add UNIQUE constraint on public.orders.order_number because duplicate values exist: %. Resolve duplicates before migrating.',
+        v_dup_order_numbers;
+    end if;
+
+    alter table public.orders
+      add constraint orders_order_number_unique unique (order_number);
+  end if;
+end $$;
+
+-- 3. Safely validate existing rows and migrate ONLY positively-identified allowed-values CHECK constraints.
+--    - Preserves all unrelated CHECK constraints, all NOT NULL checks, and all implication guards.
 --    - For combined constraints that restrict a target column via `= ANY (ARRAY[...])`,
 --      recreates the COMPLETE original constraint logic with the expanded allowed values.
---    - Drops and replaces ONLY pure single-column allowed-values CHECK constraints for the
---      target status columns.
---    - Aborts safely if any constraint touching a target column cannot be preserved cleanly.
+--    - Drops and replaces ONLY constraints positively matched as pure single-column allowed-values checks.
+--    - Aborts safely if any constraint touching a target column cannot be positively identified or preserved.
 do $$
 declare
   v_orders_relid oid := 'public.orders'::regclass;
@@ -183,7 +313,11 @@ declare
   v_target_cols text[];
   v_unrelated_cols text[];
   v_col text;
+  v_norm text;
+  v_val_clause text;
+  v_disjunct text;
   v_skel text;
+  v_skel_no_notnull text;
   v_enum_match text[];
   v_enum_inner text;
   v_existing_lits text[];
@@ -192,6 +326,7 @@ declare
   v_new_array_items text;
   v_rewritten_def text;
   v_remaining_after_enum text;
+  v_remaining_no_notnull text;
   v_occupied_order_cons text[] := array[]::text[];
   v_occupied_item_cons text[] := array[]::text[];
   v_invalid_order_statuses text;
@@ -200,6 +335,7 @@ declare
   v_invalid_refund_statuses text;
   v_invalid_restoration_statuses text;
   v_invalid_item_restoration_statuses text;
+  v_invalid_item_tracking_modes text;
 begin
   -- Verify existing row data before migrating constraints
   select pg_catalog.string_agg(distinct coalesce(order_status, '<NULL>'), ', ')
@@ -262,6 +398,16 @@ begin
     raise exception 'Unexpected existing order_items.stock_restoration_status values found: %. Resolve before migrating.', v_invalid_item_restoration_statuses;
   end if;
 
+  select pg_catalog.string_agg(distinct coalesce(stock_tracking_mode, '<NULL>'), ', ')
+    into v_invalid_item_tracking_modes
+    from public.order_items
+   where stock_tracking_mode is null
+      or stock_tracking_mode not in ('legacy', 'total_only', 'size_stock', 'none');
+
+  if v_invalid_item_tracking_modes is not null then
+    raise exception 'Unexpected existing order_items.stock_tracking_mode values found: %. Resolve before migrating.', v_invalid_item_tracking_modes;
+  end if;
+
   -- Inspect existing CHECK constraints on public.orders using pg_constraint.conkey
   for v_con in
     select con.oid,
@@ -308,20 +454,40 @@ begin
       continue;
     end if;
 
-    -- Check if this is a pure single-column allowed-values CHECK constraint
+    -- Case 1b: Positively identify ONLY pure single-column allowed-values constraints.
+    --          Never drops `IS NOT NULL`, `IS NULL` alone, `<>`, `AND`, or custom rules.
     if pg_catalog.array_length(v_target_cols, 1) = 1
        and coalesce(pg_catalog.array_length(v_unrelated_cols, 1), 0) = 0 then
       v_col := v_target_cols[1];
 
-      -- Strip string literals first so literal contents never confuse structural analysis
-      v_skel := pg_catalog.regexp_replace(pg_catalog.lower(v_con.def), '''([^'']|'''')*''', '''''', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '::(character varying|varchar|bpchar|char|text)(\[\])?', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '\m' || v_col || '\M', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '\m(check|is\s+null|any|array|in|or)\M', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '[''\(\)\[\],=\s]+', '', 'g');
+      v_norm := pg_catalog.regexp_replace(pg_catalog.lower(v_con.def), '''([^'']|'''')*''', '__STR__', 'g');
+      v_norm := pg_catalog.regexp_replace(v_norm, '::(?:character varying|varchar|bpchar|char|text)(?:\[\])?', '', 'g');
+      v_norm := pg_catalog.trim(pg_catalog.regexp_replace(v_norm, '\s+', ' ', 'g'));
+      v_norm := pg_catalog.regexp_replace(v_norm, ' *([\(\)\[\],=]) *', '\1', 'g');
 
-      if v_skel = '' then
-        -- Pure single-column allowed-values constraint: safe to replace cleanly
+      -- Explicitly preserve pure single-column NOT NULL checks on non-nullable status columns
+      if v_col <> 'cancelled_by'
+         and pg_catalog.length(pg_catalog.replace(v_norm, '(', '')) = pg_catalog.length(pg_catalog.replace(v_norm, ')', ''))
+         and v_norm ~ pg_catalog.format('^check\(+%s(?:\s+|\)+)is\s+not\s+null\)+$', v_col) then
+        raise notice 'Preserved NOT NULL CHECK constraint "%" on public.orders: %', v_con.conname, v_con.def;
+        v_occupied_order_cons := pg_catalog.array_append(v_occupied_order_cons, v_con.conname);
+        continue;
+      end if;
+
+      v_val_clause := pg_catalog.format(
+        '(?:\(*%s\)*=__STR__|\(*%s\)*=any\(\(*array\[__STR__(?:,__STR__)*\]\)*\)|(?:\(*%s\s+|\(*%s\)+)in\(__STR__(?:,__STR__)*\))',
+        v_col, v_col, v_col, v_col
+      );
+      v_disjunct := pg_catalog.format(
+        '(?:%s|(?:\(*%s\s+|\(*%s\)+)is\s+null)',
+        v_val_clause, v_col, v_col
+      );
+
+      if v_norm ~ v_val_clause
+         and v_norm !~ '\m(and|not)\M'
+         and v_norm !~ '[<>!~]'
+         and pg_catalog.length(pg_catalog.replace(v_norm, '(', '')) = pg_catalog.length(pg_catalog.replace(v_norm, ')', ''))
+         and v_norm ~ pg_catalog.format('^check\(+%s(?:(?:\)+\s*|\s+)or(?:\s*\(+|\s+)%s)*\)+$', v_disjunct, v_disjunct) then
         execute pg_catalog.format(
           'alter table public.orders drop constraint if exists %I',
           v_con.conname
@@ -331,9 +497,8 @@ begin
     end if;
 
     -- Case 2: Combined or custom CHECK constraint mentioning one or more target columns.
-    -- Recreate its COMPLETE original logic + required new values if cleanly rewritable,
-    -- preserve it untouched if it is a safe non-blocking implication guard,
-    -- or abort safely if its compatibility cannot be guaranteed.
+    -- Recreates complete original logic + required new values if cleanly rewritable,
+    -- preserves pure IS NOT NULL or safe implication guards, or aborts with a clear error.
     v_rewritten_def := v_con.def;
 
     foreach v_col in array v_target_cols
@@ -355,7 +520,6 @@ begin
       if v_enum_match is not null then
         v_enum_inner := v_enum_match[2];
 
-        -- Ensure the column does not also appear outside this single enum clause in a potentially conflicting rule
         v_remaining_after_enum := pg_catalog.regexp_replace(
           v_rewritten_def,
           '\(?\s*\m' || v_col || '\M\s*\)?(?:\s*::\s*[a-z0-9_ ]+)?\s*=\s*any\s*\(\s*\(?\s*array\[[^\]]*\](?:\s*::\s*[a-z0-9_ ]+\[\])?\s*\)?\s*\)',
@@ -363,7 +527,17 @@ begin
           'i'
         );
 
-        if pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g') ~* ('\m' || v_col || '\M') then
+        v_remaining_no_notnull := pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g');
+        if v_col <> 'cancelled_by' then
+          v_remaining_no_notnull := pg_catalog.regexp_replace(
+            v_remaining_no_notnull,
+            '\(*\s*\m' || v_col || '\M\s*\)*\s+is\s+not\s+null\M',
+            '',
+            'gi'
+          );
+        end if;
+
+        if v_remaining_no_notnull ~* ('\m' || v_col || '\M') then
           raise exception
             'Combined CHECK constraint "%" on public.orders (%) references column "%" multiple times and cannot be safely auto-rewritten. Update it manually before migrating.',
             v_con.conname, v_con.def, v_col;
@@ -396,12 +570,25 @@ begin
           pg_catalog.format('%I = ANY (ARRAY[%s])', v_col, v_new_array_items)
         );
       else
-        -- Not an `= ANY (ARRAY[...])` restriction: verify whether it is strictly a non-blocking
-        -- implication guard (e.g. `(order_status <> 'delivered') OR (updated_at IS NOT NULL)`).
+        -- Check whether v_col appears solely in safe IS NOT NULL guards (for non-nullable cols)
+        -- or in a non-blocking implication guard such as `(order_status <> 'delivered') OR (...)`.
         v_skel := pg_catalog.regexp_replace(pg_catalog.lower(v_rewritten_def), '''([^'']|'''')*''', '''''', 'g');
-        v_skel := pg_catalog.regexp_replace(v_skel, '::(character varying|varchar|bpchar|char|text)(\[\])?', '', 'g');
+        v_skel := pg_catalog.regexp_replace(v_skel, '::(?:character varying|varchar|bpchar|char|text)(?:\[\])?', '', 'g');
 
-        if not (
+        v_skel_no_notnull := v_skel;
+        if v_col <> 'cancelled_by' then
+          v_skel_no_notnull := pg_catalog.regexp_replace(
+            v_skel_no_notnull,
+            '\(*\s*\m' || v_col || '\M\s*\)*\s+is\s+not\s+null\M',
+            '',
+            'gi'
+          );
+        end if;
+
+        if not (v_skel_no_notnull ~ ('\m' || v_col || '\M')) then
+          -- Constraint only checks `v_col IS NOT NULL` alongside unrelated columns; safe to preserve
+          null;
+        elsif not (
           v_skel ~ ('\m' || v_col || '\M\s*(<>|!=|is\s+distinct\s+from)\s*''''')
           and v_skel ~ '\mor\M'
           and not (v_skel ~ ('\m' || v_col || '\M\s*(=|\min\M|\mnot\s+in\M)'))
@@ -427,13 +614,13 @@ begin
       );
       raise notice 'Updated combined CHECK constraint "%" on public.orders while preserving complete original logic.', v_con.conname;
     else
-      raise notice 'Preserved unrelated combined/guard CHECK constraint "%" on public.orders: %', v_con.conname, v_con.def;
+      raise notice 'Preserved existing CHECK constraint "%" on public.orders: %', v_con.conname, v_con.def;
     end if;
 
     v_occupied_order_cons := pg_catalog.array_append(v_occupied_order_cons, v_con.conname);
   end loop;
 
-  -- Add standalone status CHECK constraints (avoiding name collision if a combined constraint keeps the default name)
+  -- Add standalone status CHECK constraints (avoiding name collision if a preserved constraint kept the default name)
   if not ('orders_order_status_check' = any(v_occupied_order_cons)) then
     alter table public.orders
       add constraint orders_order_status_check
@@ -499,12 +686,12 @@ begin
     select
       coalesce(
         pg_catalog.array_agg(a.attname::text order by a.attnum)
-          filter (where a.attname = 'stock_restoration_status'),
+          filter (where a.attname in ('stock_restoration_status', 'stock_tracking_mode')),
         array[]::text[]
       ),
       coalesce(
         pg_catalog.array_agg(a.attname::text order by a.attnum)
-          filter (where a.attname <> 'stock_restoration_status'),
+          filter (where a.attname not in ('stock_restoration_status', 'stock_tracking_mode')),
         array[]::text[]
       )
       into v_target_cols, v_unrelated_cols
@@ -515,7 +702,10 @@ begin
        and not a.attisdropped;
 
     if coalesce(pg_catalog.array_length(v_target_cols, 1), 0) = 0 then
-      if v_con.conname = 'order_items_stock_restoration_status_check' then
+      if v_con.conname in (
+        'order_items_stock_restoration_status_check',
+        'order_items_stock_tracking_mode_check'
+      ) then
         raise exception
           'Unrelated constraint "%" on public.order_items conflicts with target constraint name (%). Rename it before migrating.',
           v_con.conname, v_con.def;
@@ -525,13 +715,34 @@ begin
 
     if pg_catalog.array_length(v_target_cols, 1) = 1
        and coalesce(pg_catalog.array_length(v_unrelated_cols, 1), 0) = 0 then
-      v_skel := pg_catalog.regexp_replace(pg_catalog.lower(v_con.def), '''([^'']|'''')*''', '''''', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '::(character varying|varchar|bpchar|char|text)(\[\])?', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '\mstock_restoration_status\M', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '\m(check|is\s+null|any|array|in|or)\M', '', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '[''\(\)\[\],=\s]+', '', 'g');
+      v_col := v_target_cols[1];
 
-      if v_skel = '' then
+      v_norm := pg_catalog.regexp_replace(pg_catalog.lower(v_con.def), '''([^'']|'''')*''', '__STR__', 'g');
+      v_norm := pg_catalog.regexp_replace(v_norm, '::(?:character varying|varchar|bpchar|char|text)(?:\[\])?', '', 'g');
+      v_norm := pg_catalog.trim(pg_catalog.regexp_replace(v_norm, '\s+', ' ', 'g'));
+      v_norm := pg_catalog.regexp_replace(v_norm, ' *([\(\)\[\],=]) *', '\1', 'g');
+
+      if pg_catalog.length(pg_catalog.replace(v_norm, '(', '')) = pg_catalog.length(pg_catalog.replace(v_norm, ')', ''))
+         and v_norm ~ pg_catalog.format('^check\(+%s(?:\s+|\)+)is\s+not\s+null\)+$', v_col) then
+        raise notice 'Preserved NOT NULL CHECK constraint "%" on public.order_items: %', v_con.conname, v_con.def;
+        v_occupied_item_cons := pg_catalog.array_append(v_occupied_item_cons, v_con.conname);
+        continue;
+      end if;
+
+      v_val_clause := pg_catalog.format(
+        '(?:\(*%s\)*=__STR__|\(*%s\)*=any\(\(*array\[__STR__(?:,__STR__)*\]\)*\)|(?:\(*%s\s+|\(*%s\)+)in\(__STR__(?:,__STR__)*\))',
+        v_col, v_col, v_col, v_col
+      );
+      v_disjunct := pg_catalog.format(
+        '(?:%s|(?:\(*%s\s+|\(*%s\)+)is\s+null)',
+        v_val_clause, v_col, v_col
+      );
+
+      if v_norm ~ v_val_clause
+         and v_norm !~ '\m(and|not)\M'
+         and v_norm !~ '[<>!~]'
+         and pg_catalog.length(pg_catalog.replace(v_norm, '(', '')) = pg_catalog.length(pg_catalog.replace(v_norm, ')', ''))
+         and v_norm ~ pg_catalog.format('^check\(+%s(?:(?:\)+\s*|\s+)or(?:\s*\(+|\s+)%s)*\)+$', v_disjunct, v_disjunct) then
         execute pg_catalog.format(
           'alter table public.order_items drop constraint if exists %I',
           v_con.conname
@@ -541,51 +752,90 @@ begin
     end if;
 
     v_rewritten_def := v_con.def;
-    v_req_values := array['not_applicable', 'deducted', 'restored', 'failed'];
 
-    v_enum_match := pg_catalog.regexp_match(
-      v_rewritten_def,
-      '(\(?\s*\mstock_restoration_status\M\s*\)?(?:\s*::\s*[a-z0-9_ ]+)?\s*=\s*any\s*\(\s*\(?\s*array\[([^\]]*)\](?:\s*::\s*[a-z0-9_ ]+\[\])?\s*\)?\s*\))',
-      'i'
-    );
+    foreach v_col in array v_target_cols
+    loop
+      v_req_values := case v_col
+        when 'stock_restoration_status' then array['not_applicable', 'deducted', 'restored', 'failed']
+        when 'stock_tracking_mode' then array['legacy', 'total_only', 'size_stock', 'none']
+      end;
 
-    if v_enum_match is not null then
-      v_enum_inner := v_enum_match[2];
-      v_remaining_after_enum := pg_catalog.regexp_replace(
+      v_enum_match := pg_catalog.regexp_match(
         v_rewritten_def,
-        '\(?\s*\mstock_restoration_status\M\s*\)?(?:\s*::\s*[a-z0-9_ ]+)?\s*=\s*any\s*\(\s*\(?\s*array\[[^\]]*\](?:\s*::\s*[a-z0-9_ ]+\[\])?\s*\)?\s*\)',
-        '__TARGET_COL_ENUM__',
+        '(\(?\s*\m' || v_col || '\M\s*\)?(?:\s*::\s*[a-z0-9_ ]+)?\s*=\s*any\s*\(\s*\(?\s*array\[([^\]]*)\](?:\s*::\s*[a-z0-9_ ]+\[\])?\s*\)?\s*\))',
         'i'
       );
 
-      if pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g') ~* '\mstock_restoration_status\M'
-         or pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g') ~* '\mnot\M\s*\(?\s*__TARGET_COL_ENUM__' then
-        raise exception
-          'Combined CHECK constraint "%" on public.order_items (%) cannot be safely auto-rewritten. Update it manually before migrating.',
-          v_con.conname, v_con.def;
+      if v_enum_match is not null then
+        v_enum_inner := v_enum_match[2];
+        v_remaining_after_enum := pg_catalog.regexp_replace(
+          v_rewritten_def,
+          '\(?\s*\m' || v_col || '\M\s*\)?(?:\s*::\s*[a-z0-9_ ]+)?\s*=\s*any\s*\(\s*\(?\s*array\[[^\]]*\](?:\s*::\s*[a-z0-9_ ]+\[\])?\s*\)?\s*\)',
+          '__TARGET_COL_ENUM__',
+          'i'
+        );
+
+        v_remaining_no_notnull := pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g');
+        v_remaining_no_notnull := pg_catalog.regexp_replace(
+          v_remaining_no_notnull,
+          '\(*\s*\m' || v_col || '\M\s*\)*\s+is\s+not\s+null\M',
+          '',
+          'gi'
+        );
+
+        if v_remaining_no_notnull ~* ('\m' || v_col || '\M')
+           or pg_catalog.regexp_replace(v_remaining_after_enum, '''([^'']|'''')*''', '''''', 'g') ~* '\mnot\M\s*\(?\s*__TARGET_COL_ENUM__' then
+          raise exception
+            'Combined CHECK constraint "%" on public.order_items (%) references column "%" and cannot be safely auto-rewritten. Update it manually before migrating.',
+            v_con.conname, v_con.def, v_col;
+        end if;
+
+        select coalesce(pg_catalog.array_agg(pg_catalog.replace(m[1], '''''', '''')), array[]::text[])
+          into v_existing_lits
+          from pg_catalog.regexp_matches(v_enum_inner, '''((?:[^'']|'''')*)''', 'g') as m;
+
+        v_merged_lits := v_existing_lits || v_req_values;
+
+        select pg_catalog.string_agg(pg_catalog.quote_literal(val) || '::text', ', ')
+          into v_new_array_items
+          from (
+            select val
+              from pg_catalog.unnest(v_merged_lits) with ordinality as t(val, ord)
+             group by val
+             order by pg_catalog.min(ord)
+          ) dedup;
+
+        v_rewritten_def := pg_catalog.replace(
+          v_rewritten_def,
+          v_enum_match[1],
+          pg_catalog.format('%I = ANY (ARRAY[%s])', v_col, v_new_array_items)
+        );
+      else
+        v_skel := pg_catalog.regexp_replace(pg_catalog.lower(v_rewritten_def), '''([^'']|'''')*''', '''''', 'g');
+        v_skel := pg_catalog.regexp_replace(v_skel, '::(?:character varying|varchar|bpchar|char|text)(?:\[\])?', '', 'g');
+        v_skel_no_notnull := pg_catalog.regexp_replace(
+          v_skel,
+          '\(*\s*\m' || v_col || '\M\s*\)*\s+is\s+not\s+null\M',
+          '',
+          'gi'
+        );
+
+        if not (v_skel_no_notnull ~ ('\m' || v_col || '\M')) then
+          null;
+        elsif not (
+          v_skel ~ ('\m' || v_col || '\M\s*(<>|!=|is\s+distinct\s+from)\s*''''')
+          and v_skel ~ '\mor\M'
+          and not (v_skel ~ ('\m' || v_col || '\M\s*(=|\min\M|\mnot\s+in\M)'))
+          and not (pg_catalog.lower(v_rewritten_def) ~ ('\m' || v_col || '\M\s*(<>|!=|is\s+distinct\s+from)\s*''(deducted|restored|failed|legacy|total_only|size_stock|none)'''))
+        ) then
+          raise exception
+            'Custom/combined CHECK constraint "%" on public.order_items (%) references column "%" and cannot be automatically verified or preserved. Update or review it manually before migrating.',
+            v_con.conname, v_con.def, v_col;
+        end if;
       end if;
+    end loop;
 
-      select coalesce(pg_catalog.array_agg(pg_catalog.replace(m[1], '''''', '''')), array[]::text[])
-        into v_existing_lits
-        from pg_catalog.regexp_matches(v_enum_inner, '''((?:[^'']|'''')*)''', 'g') as m;
-
-      v_merged_lits := v_existing_lits || v_req_values;
-
-      select pg_catalog.string_agg(pg_catalog.quote_literal(val) || '::text', ', ')
-        into v_new_array_items
-        from (
-          select val
-            from pg_catalog.unnest(v_merged_lits) with ordinality as t(val, ord)
-           group by val
-           order by pg_catalog.min(ord)
-        ) dedup;
-
-      v_rewritten_def := pg_catalog.replace(
-        v_rewritten_def,
-        v_enum_match[1],
-        pg_catalog.format('stock_restoration_status = ANY (ARRAY[%s])', v_new_array_items)
-      );
-
+    if v_rewritten_def is distinct from v_con.def then
       execute pg_catalog.format('alter table public.order_items drop constraint %I', v_con.conname);
       execute pg_catalog.format(
         'alter table public.order_items add constraint %I %s%s',
@@ -595,19 +845,7 @@ begin
       );
       raise notice 'Updated combined CHECK constraint "%" on public.order_items while preserving complete original logic.', v_con.conname;
     else
-      v_skel := pg_catalog.regexp_replace(pg_catalog.lower(v_rewritten_def), '''([^'']|'''')*''', '''''', 'g');
-      v_skel := pg_catalog.regexp_replace(v_skel, '::(character varying|varchar|bpchar|char|text)(\[\])?', '', 'g');
-
-      if v_skel ~ '\mstock_restoration_status\M\s*(<>|!=|is\s+distinct\s+from)\s*'''''
-         and v_skel ~ '\mor\M'
-         and not (v_skel ~ '\mstock_restoration_status\M\s*(=|\min\M|\mnot\s+in\M)')
-         and not (pg_catalog.lower(v_rewritten_def) ~ '\mstock_restoration_status\M\s*(<>|!=|is\s+distinct\s+from)\s*''(deducted|restored|failed)''') then
-        raise notice 'Preserved unrelated guard CHECK constraint "%" on public.order_items: %', v_con.conname, v_con.def;
-      else
-        raise exception
-          'Custom/combined CHECK constraint "%" on public.order_items (%) references stock_restoration_status and cannot be automatically verified or preserved. Update or review it manually before migrating.',
-          v_con.conname, v_con.def;
-      end if;
+      raise notice 'Preserved existing CHECK constraint "%" on public.order_items: %', v_con.conname, v_con.def;
     end if;
 
     v_occupied_item_cons := pg_catalog.array_append(v_occupied_item_cons, v_con.conname);
@@ -622,34 +860,157 @@ begin
       add constraint order_items_stock_restoration_status_values_check
       check (stock_restoration_status in ('not_applicable', 'deducted', 'restored', 'failed'));
   end if;
+
+  if not ('order_items_stock_tracking_mode_check' = any(v_occupied_item_cons)) then
+    alter table public.order_items
+      add constraint order_items_stock_tracking_mode_check
+      check (stock_tracking_mode in ('legacy', 'total_only', 'size_stock', 'none'));
+  elsif not ('order_items_stock_tracking_mode_values_check' = any(v_occupied_item_cons)) then
+    alter table public.order_items
+      add constraint order_items_stock_tracking_mode_values_check
+      check (stock_tracking_mode in ('legacy', 'total_only', 'size_stock', 'none'));
+  end if;
 end $$;
 
--- 3b. Close direct PostgREST table-insert bypass on public.orders and public.order_items
---     Authenticated customers must place orders via create_order_atomic() so server-side
---     order numbers, product prices, shipping fees, totals, and stock are enforced atomically.
-drop policy if exists "Authenticated customers can create own orders" on public.orders;
-drop policy if exists "Admins can insert orders" on public.orders;
+-- 3b. Enforce RLS, table privileges, and close ALL direct customer INSERT paths on orders & order_items.
+--     - Audits pg_catalog.pg_policy (not just two known policy names): drops EVERY permissive or custom
+--       FOR INSERT policy, and splits any permissive FOR ALL policy into separate SELECT / UPDATE / DELETE
+--       policies so existing read/update/delete permissions are preserved while INSERT is admin-only.
+--     - Revokes direct table INSERT privileges from PUBLIC and anon while leaving authenticated SELECT/UPDATE/DELETE
+--       intact for existing RLS policies and admin operations.
+alter table public.orders enable row level security;
+alter table public.order_items enable row level security;
+
+revoke insert on table public.orders from public, anon;
+revoke insert on table public.order_items from public, anon;
+
+do $$
+declare
+  v_tbl text;
+  v_relid oid;
+  v_pol record;
+  v_roles_sql text;
+  v_using_sql text;
+  v_check_sql text;
+  v_update_check_sql text;
+  v_new_name text;
+begin
+  foreach v_tbl in array array['orders', 'order_items']
+  loop
+    v_relid := ('public.' || v_tbl)::regclass;
+
+    for v_pol in
+      select p.oid,
+             p.polname,
+             p.polcmd,
+             p.polpermissive,
+             p.polroles,
+             pg_catalog.pg_get_expr(p.polqual, p.polrelid) as using_expr,
+             pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid) as check_expr
+        from pg_catalog.pg_policy p
+       where p.polrelid = v_relid
+         and (p.polcmd = 'a' or (p.polcmd = '*' and p.polpermissive))
+       order by p.polname
+    loop
+      if v_pol.polcmd = 'a' then
+        execute pg_catalog.format('drop policy if exists %I on public.%I', v_pol.polname, v_tbl);
+        if v_pol.polname not in (
+          'Authenticated customers can create own orders',
+          'Users can insert own order items',
+          'Admins can insert orders',
+          'Admins can insert order items'
+        ) then
+          raise notice 'Dropped custom INSERT policy "%" on public.% to enforce create_order_atomic() checkout.', v_pol.polname, v_tbl;
+        end if;
+      elsif v_pol.polcmd = '*' and v_pol.polpermissive then
+        -- Resolve exact role list from polroles (0 means PUBLIC)
+        if array[0::oid] = v_pol.polroles or coalesce(pg_catalog.array_length(v_pol.polroles, 1), 0) = 0 then
+          v_roles_sql := 'public';
+        else
+          select pg_catalog.string_agg(pg_catalog.quote_ident(r.rolname), ', ' order by ord)
+            into v_roles_sql
+            from pg_catalog.unnest(v_pol.polroles) with ordinality as pr(roid, ord)
+            join pg_catalog.pg_roles r on r.oid = pr.roid;
+        end if;
+
+        v_using_sql := v_pol.using_expr;
+        v_check_sql := v_pol.check_expr;
+
+        execute pg_catalog.format('drop policy if exists %I on public.%I', v_pol.polname, v_tbl);
+
+        if v_using_sql is not null then
+          v_update_check_sql := coalesce(v_check_sql, v_using_sql);
+
+          v_new_name := pg_catalog.left(v_pol.polname, 54) || ' (select)';
+          if exists (select 1 from pg_catalog.pg_policy p2 where p2.polrelid = v_relid and p2.polname = v_new_name) then
+            v_new_name := pg_catalog.left(v_pol.polname, 46) || ' (select ' || v_pol.oid::text || ')';
+          end if;
+          execute pg_catalog.format(
+            'create policy %I on public.%I as permissive for select to %s using (%s)',
+            v_new_name, v_tbl, v_roles_sql, v_using_sql
+          );
+
+          v_new_name := pg_catalog.left(v_pol.polname, 54) || ' (update)';
+          if exists (select 1 from pg_catalog.pg_policy p2 where p2.polrelid = v_relid and p2.polname = v_new_name) then
+            v_new_name := pg_catalog.left(v_pol.polname, 46) || ' (update ' || v_pol.oid::text || ')';
+          end if;
+          execute pg_catalog.format(
+            'create policy %I on public.%I as permissive for update to %s using (%s) with check (%s)',
+            v_new_name, v_tbl, v_roles_sql, v_using_sql, v_update_check_sql
+          );
+
+          v_new_name := pg_catalog.left(v_pol.polname, 54) || ' (delete)';
+          if exists (select 1 from pg_catalog.pg_policy p2 where p2.polrelid = v_relid and p2.polname = v_new_name) then
+            v_new_name := pg_catalog.left(v_pol.polname, 46) || ' (delete ' || v_pol.oid::text || ')';
+          end if;
+          execute pg_catalog.format(
+            'create policy %I on public.%I as permissive for delete to %s using (%s)',
+            v_new_name, v_tbl, v_roles_sql, v_using_sql
+          );
+
+          raise notice 'Split FOR ALL policy "%" on public.% into explicit SELECT/UPDATE/DELETE policies so customers cannot directly INSERT.', v_pol.polname, v_tbl;
+        else
+          raise notice 'Dropped FOR ALL policy "%" without USING clause on public.% so customers cannot directly INSERT.', v_pol.polname, v_tbl;
+        end if;
+      end if;
+    end loop;
+  end loop;
+end $$;
+
 create policy "Admins can insert orders"
   on public.orders for insert
+  to authenticated
   with check (public.is_admin());
 
-drop policy if exists "Users can insert own order items" on public.order_items;
-drop policy if exists "Admins can insert order items" on public.order_items;
 create policy "Admins can insert order items"
   on public.order_items for insert
+  to authenticated
   with check (public.is_admin());
+
+-- 3c. Public read-only catalog state check so storefront never serves demo SKUs
+--     once any real product exists in Supabase (even if temporarily inactive).
+create or replace function public.catalog_has_real_products()
+returns boolean
+language sql
+security definer
+set search_path = pg_catalog
+stable
+as $$
+  select exists (
+    select 1
+      from public.products
+  );
+$$;
+
+revoke all on function public.catalog_has_real_products() from public;
+grant execute on function public.catalog_has_real_products() to anon, authenticated;
 
 -- 4. Atomic stock & price validation/deduction trigger when order_items are inserted
 --    - Sole stock deduction mechanism in the codebase & database (prevents double deduction).
---    - Verifies product_uuid and product_id match the exact same product when both are supplied.
---    - Real products: MUST exist in public.products, be active, have valid positive price_inr,
---      and have non-NULL non-negative stock_count >= quantity.
---    - Preview/demo products: ONLY permitted when public.products has ZERO rows total
---      (including inactive rows), product_uuid is NULL, product_id matches the explicit 8-SKU
---      preview catalog, selected_size matches that SKU's actual catalog sizes, and price matches.
---    - Size validation: whenever products.size_stock is non-empty, the selected size key must
---      exist unambiguously (no case-insensitive duplicates), hold a valid integer in 0..2147483647,
---      and have >= quantity available. When size_stock is {}, validates selected_size against sizes[].
+--    - Requires every order item to resolve to an active row in public.products (no demo bypass).
+--    - Records order-time stock_tracking_mode ('size_stock' or 'total_only') on every item.
+--    - Enforces non-empty, duplicate-free sizes configuration and validates selected_size
+--      unconditionally (both when size_stock is populated and when size_stock = '{}').
 create or replace function public.decrement_stock_on_order_item()
 returns trigger
 language plpgsql
@@ -658,22 +1019,21 @@ set search_path = pg_catalog
 as $$
 declare
   v_prod public.products%rowtype;
+  v_clean_pid text;
   v_uuid_from_pid uuid;
   v_lookup_uuid uuid;
   v_next_size_stock jsonb;
   v_has_size_inventory boolean := false;
+  v_size_stock_key_count integer := 0;
+  v_size_stock_distinct_count integer := 0;
+  v_has_blank_size_key boolean := false;
   v_size_match_count integer := 0;
   v_size_key text;
   v_size_val_type text;
   v_size_val_text text;
   v_curr_size_big bigint;
   v_updated_rows integer;
-  v_is_preview_catalog_mode boolean := false;
-  v_expected_preview_price integer;
-  v_expected_preview_name text;
-  v_allowed_preview_sizes text[];
   v_matched_size text;
-  v_matched_size_count integer := 0;
 begin
   if new.quantity is null or new.quantity <= 0 then
     raise exception 'Order item quantity must be at least 1.';
@@ -687,21 +1047,22 @@ begin
     raise exception 'Order item unit_price_inr must be a positive integer.';
   end if;
 
-  if new.product_id is not null
-     and new.product_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
-    v_uuid_from_pid := new.product_id::uuid;
+  v_clean_pid := trim(coalesce(new.product_id, ''));
+
+  if v_clean_pid ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    v_uuid_from_pid := v_clean_pid::uuid;
   else
     v_uuid_from_pid := null;
   end if;
 
   if new.product_uuid is not null and v_uuid_from_pid is not null and new.product_uuid <> v_uuid_from_pid then
     raise exception 'Order item product_uuid (%) and product_id (%) do not refer to the same product.',
-      new.product_uuid, new.product_id;
+      new.product_uuid, v_clean_pid;
   end if;
 
   v_lookup_uuid := coalesce(new.product_uuid, v_uuid_from_pid);
 
-  if v_lookup_uuid is null and nullif(trim(coalesce(new.product_id, '')), '') is null then
+  if v_lookup_uuid is null and v_clean_pid = '' then
     raise exception 'Order item must specify product_uuid or product_id.';
   end if;
 
@@ -712,81 +1073,28 @@ begin
      where p.id = v_lookup_uuid
      for update;
 
-    if found and nullif(trim(coalesce(new.product_id, '')), '') is not null then
+    if found and v_clean_pid <> '' then
       if not (
-        new.product_id = v_prod.id::text
-        or new.product_id = v_prod.slug
-        or new.product_id = ('ak-' || v_prod.slug)
+        v_clean_pid = v_prod.id::text
+        or v_clean_pid = v_prod.slug
       ) then
         raise exception 'Order item product_uuid (%) does not match product_id (%) for "%".',
-          v_lookup_uuid, new.product_id, v_prod.name;
+          v_lookup_uuid, v_clean_pid, v_prod.name;
       end if;
     end if;
   else
     select p.*
       into v_prod
       from public.products p
-     where p.slug = new.product_id
-        or ('ak-' || p.slug) = new.product_id
-     order by case when p.slug = new.product_id then 1 else 2 end
+     where p.slug = v_clean_pid
      limit 1
      for update;
   end if;
 
   if not found then
-    -- Preview/demo items are ONLY allowed when public.products has ZERO rows total
-    -- (including inactive rows), no UUID was supplied, product_id matches an approved
-    -- preview SKU from src/data/catalog.ts, and selected_size is valid for that SKU.
-    v_is_preview_catalog_mode := not exists (
-      select 1 from public.products
-    );
-
-    select p_sku.expected_price, p_sku.expected_name, p_sku.allowed_sizes
-      into v_expected_preview_price, v_expected_preview_name, v_allowed_preview_sizes
-      from (
-        values
-          ('ak-classic-oversized-tee', 799,  'Classic Oversized Tee',  array['XS', 'S', 'M', 'L', 'XL', 'XXL']::text[]),
-          ('ak-everyday-linen-shirt',  1299, 'Everyday Linen Shirt',   array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-          ('ak-modern-essential-top',  899,  'Modern Essential Top',   array['XS', 'S', 'M', 'L', 'XL']::text[]),
-          ('ak-relaxed-fit-trousers',  1499, 'Relaxed Fit Trousers',   array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-          ('ak-everyday-street-tee',   749,  'Everyday Street Tee',    array['XS', 'S', 'M', 'L', 'XL']::text[]),
-          ('ak-urban-layer-shirt',     1199, 'Urban Layer Shirt',      array['XS', 'S', 'M', 'L', 'XL', 'XXL']::text[]),
-          ('ak-signature-denim',       1799, 'Signature Denim',        array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-          ('ak-minimal-daily-dress',   1599, 'Minimal Daily Dress',    array['XS', 'S', 'M', 'L', 'XL']::text[])
-      ) as p_sku(sku, expected_price, expected_name, allowed_sizes)
-     where p_sku.sku = new.product_id;
-
-    if v_is_preview_catalog_mode
-       and v_lookup_uuid is null
-       and v_expected_preview_price is not null then
-      select sz
-        into v_matched_size
-        from pg_catalog.unnest(v_allowed_preview_sizes) as sz
-       where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(new.selected_size))
-       limit 1;
-
-      if v_matched_size is null then
-        raise exception 'Size "%" is not available for preview item "%".',
-          new.selected_size, v_expected_preview_name;
-      end if;
-
-      if new.unit_price_inr <> v_expected_preview_price then
-        raise exception 'Price mismatch for preview item "%" (submitted ₹%, expected ₹%).',
-          v_expected_preview_name, new.unit_price_inr, v_expected_preview_price;
-      end if;
-
-      new.product_name := v_expected_preview_name;
-      new.selected_size := v_matched_size;
-      new.stock_deducted := false;
-      new.stock_restored := false;
-      new.stock_restoration_status := 'not_applicable';
-      new.stock_restoration_error := null;
-      return new;
-    end if;
-
     raise exception 'Product "%" (id: %) was not found in Supabase inventory. Checkout rejected.',
       coalesce(nullif(trim(coalesce(new.product_name, '')), ''), 'Unknown Product'),
-      coalesce(v_lookup_uuid::text, new.product_id);
+      coalesce(v_lookup_uuid::text, v_clean_pid);
   end if;
 
   if v_prod.is_active is distinct from true then
@@ -801,6 +1109,40 @@ begin
   if new.unit_price_inr <> v_prod.price_inr then
     raise exception 'Unit price mismatch for "%" (submitted ₹%, authoritative ₹%).',
       v_prod.name, new.unit_price_inr, v_prod.price_inr;
+  end if;
+
+  -- Unconditional clothing size validation (never skipped even if sizes or size_stock is empty)
+  if v_prod.sizes is null or coalesce(pg_catalog.array_length(v_prod.sizes, 1), 0) = 0 then
+    raise exception 'Product "%" has no valid sizes configured in Supabase and cannot be ordered.',
+      v_prod.name;
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.unnest(v_prod.sizes) as sz
+     where nullif(trim(coalesce(sz, '')), '') is null
+  ) then
+    raise exception 'Product "%" contains blank or invalid entries in its configured sizes.',
+      v_prod.name;
+  end if;
+
+  if (
+    select pg_catalog.count(distinct pg_catalog.lower(trim(sz)))
+      from pg_catalog.unnest(v_prod.sizes) as sz
+  ) <> pg_catalog.array_length(v_prod.sizes, 1) then
+    raise exception 'Product "%" has duplicate sizes configured. Fix size configuration before checkout.',
+      v_prod.name;
+  end if;
+
+  select trim(sz)
+    into v_matched_size
+    from pg_catalog.unnest(v_prod.sizes) as sz
+   where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(new.selected_size))
+   limit 1;
+
+  if v_matched_size is null then
+    raise exception 'Size "%" is not available for "%".',
+      new.selected_size, v_prod.name;
   end if;
 
   -- Enforce canonical product identity & metadata from public.products
@@ -827,24 +1169,30 @@ begin
     raise exception 'Invalid size_stock configuration for "%": expected JSON object.', v_prod.name;
   end if;
 
-  select exists (
-    select 1 from pg_catalog.jsonb_object_keys(v_next_size_stock)
-  )
-    into v_has_size_inventory;
+  select pg_catalog.count(*)::integer,
+         pg_catalog.count(distinct pg_catalog.lower(trim(k)))::integer,
+         bool_or(nullif(trim(k), '') is null)
+    into v_size_stock_key_count, v_size_stock_distinct_count, v_has_blank_size_key
+    from pg_catalog.jsonb_object_keys(v_next_size_stock) as k;
 
-  -- Strict size inventory enforcement whenever size_stock contains any size keys
+  v_has_size_inventory := v_size_stock_key_count > 0;
+
   if v_has_size_inventory then
+    if coalesce(v_has_blank_size_key, false) then
+      raise exception 'Product "%" contains blank size key(s) in size_stock.', v_prod.name;
+    end if;
+
+    if v_size_stock_key_count <> v_size_stock_distinct_count then
+      raise exception 'Ambiguous duplicate size keys detected in size_stock for "%". Clean up duplicate size keys before checkout.',
+        v_prod.name;
+    end if;
+
     select pg_catalog.count(*)::integer, pg_catalog.min(k)
       into v_size_match_count, v_size_key
       from pg_catalog.jsonb_object_keys(v_next_size_stock) as k
      where pg_catalog.lower(trim(k)) = pg_catalog.lower(trim(new.selected_size));
 
-    if v_size_match_count > 1 then
-      raise exception 'Ambiguous size inventory keys matched "%" for "%". Clean up duplicate size keys in size_stock.',
-        new.selected_size, v_prod.name;
-    end if;
-
-    if v_size_match_count = 0 or v_size_key is null then
+    if v_size_match_count <> 1 or v_size_key is null then
       raise exception 'Size "%" is not available in size inventory for "%".',
         new.selected_size, v_prod.name;
     end if;
@@ -871,7 +1219,7 @@ begin
         v_prod.name, v_size_key, new.quantity, v_curr_size_big;
     end if;
 
-    new.selected_size := v_size_key;
+    new.selected_size := trim(v_size_key);
 
     v_next_size_stock := pg_catalog.jsonb_set(
       v_next_size_stock,
@@ -879,23 +1227,7 @@ begin
       pg_catalog.to_jsonb((v_curr_size_big - new.quantity::bigint)::integer),
       true
     );
-  elsif coalesce(pg_catalog.array_length(v_prod.sizes, 1), 0) > 0 then
-    -- Total-stock-only mode (size_stock = '{}'): still reject invalid/unavailable sizes
-    select pg_catalog.count(*)::integer, pg_catalog.min(sz)
-      into v_matched_size_count, v_matched_size
-      from pg_catalog.unnest(v_prod.sizes) as sz
-     where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(new.selected_size));
-
-    if v_matched_size_count > 1 then
-      raise exception 'Ambiguous size "%" configured on "%".',
-        new.selected_size, v_prod.name;
-    end if;
-
-    if v_matched_size_count = 0 or v_matched_size is null then
-      raise exception 'Size "%" is not available for "%".',
-        new.selected_size, v_prod.name;
-    end if;
-
+  else
     new.selected_size := v_matched_size;
   end if;
 
@@ -916,6 +1248,7 @@ begin
   new.stock_restored := false;
   new.stock_restoration_status := 'deducted';
   new.stock_restoration_error := null;
+  new.stock_tracking_mode := case when v_has_size_inventory then 'size_stock' else 'total_only' end;
 
   update public.orders
      set stock_deducted = true,
@@ -936,16 +1269,15 @@ create trigger order_items_decrement_stock
   before insert on public.order_items
   for each row execute procedure public.decrement_stock_on_order_item();
 
--- 5. Single-transaction atomic order creation RPC with server-side price, shipping & order-number authority
---    - Ignores client prices/shipping/totals for calculation: resolves every real product
---      from public.products and uses public.products.price_inr, name, id, and image_url.
---    - Verifies product_uuid and product_id refer to the exact same product when both supplied.
---    - Generates unique server-side order_number following project AK-XXXXXX convention
---      (and validates format if a caller provides one).
---    - Enforces shipping rule (free >= ₹1,499; otherwise ₹99) and recalculates subtotal & total.
---    - Rejects inactive/missing products, invalid quantities/sizes, negative/invalid prices,
---      inconsistent client prices/totals, and integer overflows.
---    - Preview fallback activates ONLY when public.products has zero rows total (including inactive).
+-- 5. Single-transaction atomic order creation RPC with server-side price, shipping, size & idempotency
+--    - Ignores client prices/shipping/totals for calculation: resolves every item from public.products
+--      and uses public.products.price_inr, name, id, image_url, sizes, stock_count & size_stock.
+--    - Supports client idempotency_key to prevent duplicate orders on repeated clicks/network retries.
+--    - Unconditionally validates sizes[] and size_stock (rejecting blank/empty/duplicate/invalid size setups).
+drop function if exists public.create_order_atomic(
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb
+);
+
 create or replace function public.create_order_atomic(
   p_order_number text default null,
   p_customer_name text default null,
@@ -957,7 +1289,8 @@ create or replace function public.create_order_atomic(
   p_shipping_inr integer default null,
   p_total_inr integer default null,
   p_notes text default null,
-  p_items jsonb default '[]'::jsonb
+  p_items jsonb default '[]'::jsonb,
+  p_idempotency_key text default null
 )
 returns jsonb
 language plpgsql
@@ -966,13 +1299,18 @@ set search_path = pg_catalog
 as $$
 declare
   v_uid uuid;
+  v_idempotency_key text;
+  v_customer_name text;
+  v_customer_email text;
+  v_customer_phone text;
   v_req_order_number text;
   v_order_number text;
   v_rand_bytes bytea;
   v_rand_int integer;
   v_attempt integer;
+  v_ins_attempt integer;
+  v_conflict_constraint text;
   v_payment_status text;
-  v_is_preview_catalog_mode boolean := false;
   v_order public.orders%rowtype;
   v_item record;
   v_prod public.products%rowtype;
@@ -993,7 +1331,17 @@ declare
   v_resolved_product_name text;
   v_resolved_product_image text;
   v_resolved_selected_size text;
-  v_allowed_preview_sizes text[];
+  v_matched_size text;
+  v_prod_size_stock jsonb;
+  v_has_size_inventory boolean := false;
+  v_size_stock_key_count integer := 0;
+  v_size_stock_distinct_count integer := 0;
+  v_has_blank_size_key boolean := false;
+  v_size_match_count integer := 0;
+  v_size_key text;
+  v_size_val_type text;
+  v_size_val_text text;
+  v_curr_size_big bigint;
   v_line_total_big bigint;
   v_calc_subtotal_big bigint := 0;
   v_calc_subtotal_inr integer;
@@ -1009,10 +1357,48 @@ begin
     raise exception 'Authentication required to place an order.';
   end if;
 
-  if nullif(trim(coalesce(p_customer_name, '')), '') is null
-     or nullif(trim(coalesce(p_customer_email, '')), '') is null
-     or nullif(trim(coalesce(p_customer_phone, '')), '') is null then
-    raise exception 'Customer contact details are required.';
+  v_idempotency_key := nullif(trim(coalesce(p_idempotency_key, '')), '');
+  if v_idempotency_key is not null and pg_catalog.length(v_idempotency_key) > 128 then
+    raise exception 'Invalid idempotency key length.';
+  end if;
+
+  if v_idempotency_key is not null then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtext(v_uid::text || ':' || v_idempotency_key)
+    );
+
+    select *
+      into v_order
+      from public.orders o
+     where o.user_id = v_uid
+       and o.idempotency_key = v_idempotency_key
+     limit 1;
+
+    if found then
+      select pg_catalog.jsonb_agg(pg_catalog.to_jsonb(oi) order by oi.created_at, oi.id)
+        into v_items_json
+        from public.order_items oi
+       where oi.order_id = v_order.id;
+
+      return pg_catalog.jsonb_build_object(
+        'order', pg_catalog.to_jsonb(v_order),
+        'order_items', coalesce(v_items_json, '[]'::jsonb)
+      );
+    end if;
+  end if;
+
+  v_customer_name := nullif(trim(coalesce(p_customer_name, '')), '');
+  v_customer_email := coalesce(
+    nullif(trim(coalesce(p_customer_email, '')), ''),
+    (select nullif(trim(p.email), '') from public.profiles p where p.id = v_uid),
+    (select nullif(trim(u.email), '') from auth.users u where u.id = v_uid)
+  );
+  v_customer_phone := nullif(trim(coalesce(p_customer_phone, '')), '');
+
+  if v_customer_name is null
+     or v_customer_email is null
+     or v_customer_phone is null then
+    raise exception 'Customer contact details (name, email, phone) are required.';
   end if;
 
   v_req_order_number := nullif(trim(coalesce(p_order_number, '')), '');
@@ -1020,51 +1406,17 @@ begin
     raise exception 'Invalid order number format (%). Expected AK-XXXXXX.', v_req_order_number;
   end if;
 
-  -- Generate authoritative server-side unique order number matching AK-XXXXXX convention
-  for v_attempt in 1..25 loop
-    v_rand_bytes := pg_catalog.decode(
-      pg_catalog.substr(pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 8),
-      'hex'
-    );
-    v_rand_int :=
-      ((pg_catalog.get_byte(v_rand_bytes, 0) % 128) * 16777216)
-      + (pg_catalog.get_byte(v_rand_bytes, 1) * 65536)
-      + (pg_catalog.get_byte(v_rand_bytes, 2) * 256)
-      + pg_catalog.get_byte(v_rand_bytes, 3);
-    v_order_number := 'AK-' || ((v_rand_int % 900000) + 100000)::text;
-    exit when not exists (
-      select 1 from public.orders o where o.order_number = v_order_number
-    );
-    v_order_number := null;
-  end loop;
-
-  if v_order_number is null then
-    for v_attempt in 1..10 loop
-      v_rand_bytes := pg_catalog.decode(
-        pg_catalog.substr(pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 8),
-        'hex'
-      );
-      v_rand_int :=
-        ((pg_catalog.get_byte(v_rand_bytes, 0) % 128) * 16777216)
-        + (pg_catalog.get_byte(v_rand_bytes, 1) * 65536)
-        + (pg_catalog.get_byte(v_rand_bytes, 2) * 256)
-        + pg_catalog.get_byte(v_rand_bytes, 3);
-      v_order_number := 'AK-' || pg_catalog.lpad(((v_rand_int % 90000000) + 10000000)::text, 8, '0');
-      exit when not exists (
-        select 1 from public.orders o where o.order_number = v_order_number
-      );
-      v_order_number := null;
-    end loop;
-  end if;
-
-  if v_order_number is null then
-    raise exception 'Unable to allocate a unique order number. Please retry checkout.';
-  end if;
-
   if p_shipping_address is null
      or pg_catalog.jsonb_typeof(p_shipping_address) <> 'object'
      or p_shipping_address = '{}'::jsonb then
     raise exception 'Valid shipping address object is required.';
+  end if;
+
+  if nullif(trim(coalesce(p_shipping_address ->> 'line1', '')), '') is null
+     or nullif(trim(coalesce(p_shipping_address ->> 'city', '')), '') is null
+     or nullif(trim(coalesce(p_shipping_address ->> 'state', '')), '') is null
+     or trim(coalesce(p_shipping_address ->> 'pincode', '')) !~ '^[0-9]{6}$' then
+    raise exception 'Complete shipping address (line1, city, state, and 6-digit pincode) is required.';
   end if;
 
   if p_payment_method = 'cod' then
@@ -1086,11 +1438,6 @@ begin
      or pg_catalog.jsonb_array_length(p_items) = 0 then
     raise exception 'Order must contain at least one item.';
   end if;
-
-  -- Preview mode is ONLY active when public.products has zero rows total (including inactive rows).
-  v_is_preview_catalog_mode := not exists (
-    select 1 from public.products
-  );
 
   -- Resolve, lock, and validate every item in deterministic order before creating order.
   for v_item in
@@ -1180,7 +1527,6 @@ begin
       v_client_unit_price := null;
     end if;
 
-    -- Resolve authoritative product from public.products and lock row
     if v_product_uuid is not null then
       select p.*
         into v_prod
@@ -1192,7 +1538,6 @@ begin
         if not (
           v_item.product_id = v_prod.id::text
           or v_item.product_id = v_prod.slug
-          or v_item.product_id = ('ak-' || v_prod.slug)
         ) then
           raise exception 'Order item product_uuid (%) and product_id (%) do not refer to the same product.',
             v_product_uuid, v_item.product_id;
@@ -1203,81 +1548,138 @@ begin
         into v_prod
         from public.products p
        where p.slug = v_item.product_id
-          or ('ak-' || p.slug) = v_item.product_id
-       order by case when p.slug = v_item.product_id then 1 else 2 end
        limit 1
        for update;
     end if;
 
-    if found then
-      if v_prod.is_active is distinct from true then
-        raise exception 'Product "%" is no longer active and cannot be ordered.', v_prod.name;
-      end if;
-
-      if v_prod.price_inr is null or v_prod.price_inr <= 0 then
-        raise exception 'Product "%" does not have a valid positive price in Supabase.', v_prod.name;
-      end if;
-
-      v_auth_unit_price := v_prod.price_inr;
-
-      if v_client_unit_price is not null and v_client_unit_price <> v_auth_unit_price then
-        raise exception 'Price mismatch for "%" (submitted ₹%, current catalog price ₹%). Refresh your bag and try again.',
-          v_prod.name, v_client_unit_price, v_auth_unit_price;
-      end if;
-
-      v_resolved_product_uuid := v_prod.id;
-      v_resolved_product_id := v_prod.id::text;
-      v_resolved_product_name := v_prod.name;
-      v_resolved_product_image := nullif(trim(coalesce(v_prod.image_url, '')), '');
-      v_resolved_selected_size := v_item.selected_size;
-    else
-      -- Explicit unseeded preview catalog fallback (zero product rows total, NULL UUID, approved SKU + size + price)
-      v_auth_unit_price := null;
-      v_resolved_product_name := null;
-      v_allowed_preview_sizes := null;
-
-      if v_is_preview_catalog_mode and v_product_uuid is null then
-        select p_sku.expected_price, p_sku.expected_name, p_sku.allowed_sizes
-          into v_auth_unit_price, v_resolved_product_name, v_allowed_preview_sizes
-          from (
-            values
-              ('ak-classic-oversized-tee', 799,  'Classic Oversized Tee',  array['XS', 'S', 'M', 'L', 'XL', 'XXL']::text[]),
-              ('ak-everyday-linen-shirt',  1299, 'Everyday Linen Shirt',   array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-              ('ak-modern-essential-top',  899,  'Modern Essential Top',   array['XS', 'S', 'M', 'L', 'XL']::text[]),
-              ('ak-relaxed-fit-trousers',  1499, 'Relaxed Fit Trousers',   array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-              ('ak-everyday-street-tee',   749,  'Everyday Street Tee',    array['XS', 'S', 'M', 'L', 'XL']::text[]),
-              ('ak-urban-layer-shirt',     1199, 'Urban Layer Shirt',      array['XS', 'S', 'M', 'L', 'XL', 'XXL']::text[]),
-              ('ak-signature-denim',       1799, 'Signature Denim',        array['S', 'M', 'L', 'XL', 'XXL']::text[]),
-              ('ak-minimal-daily-dress',   1599, 'Minimal Daily Dress',    array['XS', 'S', 'M', 'L', 'XL']::text[])
-          ) as p_sku(sku, expected_price, expected_name, allowed_sizes)
-         where p_sku.sku = v_item.product_id;
-      end if;
-
-      if v_auth_unit_price is null then
-        raise exception 'Product (id: %) was not found in Supabase inventory. Checkout rejected.',
-          coalesce(v_product_uuid::text, v_item.product_id);
-      end if;
-
-      select sz
-        into v_resolved_selected_size
-        from pg_catalog.unnest(v_allowed_preview_sizes) as sz
-       where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(v_item.selected_size))
-       limit 1;
-
-      if v_resolved_selected_size is null then
-        raise exception 'Size "%" is not available for preview product "%".',
-          v_item.selected_size, v_resolved_product_name;
-      end if;
-
-      if v_client_unit_price is not null and v_client_unit_price <> v_auth_unit_price then
-        raise exception 'Price mismatch for preview product "%" (submitted ₹%, expected ₹%). Refresh your bag and try again.',
-          v_resolved_product_name, v_client_unit_price, v_auth_unit_price;
-      end if;
-
-      v_resolved_product_uuid := null;
-      v_resolved_product_id := v_item.product_id;
-      v_resolved_product_image := v_item.product_image;
+    if not found then
+      raise exception 'Product (id: %) was not found in Supabase inventory. Refresh your bag and try again.',
+        coalesce(v_product_uuid::text, v_item.product_id);
     end if;
+
+    if v_prod.is_active is distinct from true then
+      raise exception 'Product "%" is no longer active and cannot be ordered.', v_prod.name;
+    end if;
+
+    if v_prod.price_inr is null or v_prod.price_inr <= 0 then
+      raise exception 'Product "%" does not have a valid positive price in Supabase.', v_prod.name;
+    end if;
+
+    v_auth_unit_price := v_prod.price_inr;
+
+    if v_client_unit_price is not null and v_client_unit_price <> v_auth_unit_price then
+      raise exception 'Price mismatch for "%" (submitted ₹%, current catalog price ₹%). Refresh your bag and try again.',
+        v_prod.name, v_client_unit_price, v_auth_unit_price;
+    end if;
+
+    if v_prod.stock_count is null or v_prod.stock_count < 0 then
+      raise exception 'Product "%" has an invalid total stock_count (%). Checkout rejected.',
+        v_prod.name, coalesce(v_prod.stock_count::text, 'NULL');
+    end if;
+
+    if v_prod.stock_count < v_qty then
+      raise exception 'Insufficient stock for "%" (requested %, available %).',
+        v_prod.name, v_qty, v_prod.stock_count;
+    end if;
+
+    if v_prod.sizes is null or coalesce(pg_catalog.array_length(v_prod.sizes, 1), 0) = 0 then
+      raise exception 'Product "%" has no valid sizes configured in Supabase and cannot be ordered.',
+        v_prod.name;
+    end if;
+
+    if exists (
+      select 1
+        from pg_catalog.unnest(v_prod.sizes) as sz
+       where nullif(trim(coalesce(sz, '')), '') is null
+    ) then
+      raise exception 'Product "%" contains blank or invalid entries in its configured sizes.',
+        v_prod.name;
+    end if;
+
+    if (
+      select pg_catalog.count(distinct pg_catalog.lower(trim(sz)))
+        from pg_catalog.unnest(v_prod.sizes) as sz
+    ) <> pg_catalog.array_length(v_prod.sizes, 1) then
+      raise exception 'Product "%" has duplicate sizes configured. Fix size configuration before checkout.',
+        v_prod.name;
+    end if;
+
+    select trim(sz)
+      into v_matched_size
+      from pg_catalog.unnest(v_prod.sizes) as sz
+     where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(v_item.selected_size))
+     limit 1;
+
+    if v_matched_size is null then
+      raise exception 'Size "%" is not available for "%".',
+        v_item.selected_size, v_prod.name;
+    end if;
+
+    v_prod_size_stock := coalesce(v_prod.size_stock, '{}'::jsonb);
+    if pg_catalog.jsonb_typeof(v_prod_size_stock) <> 'object' then
+      raise exception 'Invalid size_stock configuration for "%": expected JSON object.', v_prod.name;
+    end if;
+
+    select pg_catalog.count(*)::integer,
+           pg_catalog.count(distinct pg_catalog.lower(trim(k)))::integer,
+           bool_or(nullif(trim(k), '') is null)
+      into v_size_stock_key_count, v_size_stock_distinct_count, v_has_blank_size_key
+      from pg_catalog.jsonb_object_keys(v_prod_size_stock) as k;
+
+    v_has_size_inventory := v_size_stock_key_count > 0;
+    v_size_key := null;
+
+    if v_has_size_inventory then
+      if coalesce(v_has_blank_size_key, false) then
+        raise exception 'Product "%" contains blank size key(s) in size_stock.', v_prod.name;
+      end if;
+
+      if v_size_stock_key_count <> v_size_stock_distinct_count then
+        raise exception 'Ambiguous duplicate size keys detected in size_stock for "%". Clean up duplicate size keys before checkout.',
+          v_prod.name;
+      end if;
+
+      select pg_catalog.count(*)::integer, pg_catalog.min(k)
+        into v_size_match_count, v_size_key
+        from pg_catalog.jsonb_object_keys(v_prod_size_stock) as k
+       where pg_catalog.lower(trim(k)) = pg_catalog.lower(trim(v_item.selected_size));
+
+      if v_size_match_count <> 1 or v_size_key is null then
+        raise exception 'Size "%" is not available in size inventory for "%".',
+          v_item.selected_size, v_prod.name;
+      end if;
+
+      v_size_val_type := pg_catalog.jsonb_typeof(v_prod_size_stock -> v_size_key);
+      v_size_val_text := v_prod_size_stock ->> v_size_key;
+
+      if v_size_val_type not in ('number', 'string')
+         or v_size_val_text is null
+         or v_size_val_text !~ '^\d+$'
+         or pg_catalog.length(v_size_val_text) > 10 then
+        raise exception 'Invalid or non-numeric stock count for "%" in size "%" (stored value: %).',
+          v_prod.name, v_item.selected_size, coalesce(v_size_val_text, 'null');
+      end if;
+
+      v_curr_size_big := v_size_val_text::bigint;
+      if v_curr_size_big < 0 or v_curr_size_big > 2147483647 then
+        raise exception 'Out-of-range size stock count (%) for "%" in size "%".',
+          v_size_val_text, v_prod.name, v_item.selected_size;
+      end if;
+
+      if v_curr_size_big < v_qty::bigint then
+        raise exception 'Insufficient stock for "%" in size % (requested %, available %).',
+          v_prod.name, v_size_key, v_qty, v_curr_size_big;
+      end if;
+
+      v_resolved_selected_size := trim(v_size_key);
+    else
+      v_resolved_selected_size := v_matched_size;
+    end if;
+
+    v_resolved_product_uuid := v_prod.id;
+    v_resolved_product_id := v_prod.id::text;
+    v_resolved_product_name := v_prod.name;
+    v_resolved_product_image := nullif(trim(coalesce(v_prod.image_url, '')), '');
 
     v_line_total_big := v_auth_unit_price::bigint * v_qty::bigint;
     v_calc_subtotal_big := v_calc_subtotal_big + v_line_total_big;
@@ -1329,37 +1731,101 @@ begin
       p_total_inr, v_calc_total_inr;
   end if;
 
-  insert into public.orders (
-    order_number,
-    user_id,
-    customer_name,
-    customer_email,
-    customer_phone,
-    shipping_address,
-    payment_method,
-    payment_status,
-    order_status,
-    subtotal_inr,
-    shipping_inr,
-    total_inr,
-    notes
-  )
-  values (
-    v_order_number,
-    v_uid,
-    trim(p_customer_name),
-    trim(p_customer_email),
-    trim(p_customer_phone),
-    p_shipping_address,
-    p_payment_method,
-    v_payment_status,
-    'pending',
-    v_calc_subtotal_inr,
-    v_calc_shipping_inr,
-    v_calc_total_inr,
-    nullif(trim(coalesce(p_notes, '')), '')
-  )
-  returning * into v_order;
+  -- Generate strictly 6-digit AK-XXXXXX order number and retry cleanly on concurrent unique_violation
+  v_order.id := null;
+  for v_ins_attempt in 1..25 loop
+    v_order_number := null;
+    for v_attempt in 1..10 loop
+      v_rand_bytes := pg_catalog.decode(
+        pg_catalog.substr(pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 8),
+        'hex'
+      );
+      v_rand_int :=
+        ((pg_catalog.get_byte(v_rand_bytes, 0) % 128) * 16777216)
+        + (pg_catalog.get_byte(v_rand_bytes, 1) * 65536)
+        + (pg_catalog.get_byte(v_rand_bytes, 2) * 256)
+        + pg_catalog.get_byte(v_rand_bytes, 3);
+      v_order_number := 'AK-' || ((v_rand_int % 900000) + 100000)::text;
+      exit when not exists (
+        select 1 from public.orders o where o.order_number = v_order_number
+      );
+      v_order_number := null;
+    end loop;
+
+    if v_order_number is null then
+      raise exception 'Unable to allocate a unique 6-digit order number (AK-XXXXXX). Please retry checkout.';
+    end if;
+
+    begin
+      insert into public.orders (
+        order_number,
+        user_id,
+        customer_name,
+        customer_email,
+        customer_phone,
+        shipping_address,
+        payment_method,
+        payment_status,
+        order_status,
+        subtotal_inr,
+        shipping_inr,
+        total_inr,
+        notes,
+        idempotency_key
+      )
+      values (
+        v_order_number,
+        v_uid,
+        v_customer_name,
+        v_customer_email,
+        v_customer_phone,
+        p_shipping_address,
+        p_payment_method,
+        v_payment_status,
+        'pending',
+        v_calc_subtotal_inr,
+        v_calc_shipping_inr,
+        v_calc_total_inr,
+        nullif(trim(coalesce(p_notes, '')), ''),
+        v_idempotency_key
+      )
+      returning * into v_order;
+
+      exit;
+    exception
+      when unique_violation then
+        get stacked diagnostics v_conflict_constraint = constraint_name;
+        if not exists (
+          select 1
+            from pg_catalog.pg_index idx
+            join pg_catalog.pg_class rel on rel.oid = idx.indrelid
+            join pg_catalog.pg_namespace nsp on nsp.oid = rel.relnamespace
+            join pg_catalog.pg_class idx_rel on idx_rel.oid = idx.indexrelid
+            join pg_catalog.pg_attribute att
+              on att.attrelid = rel.oid
+             and att.attnum = idx.indkey[0]
+            left join pg_catalog.pg_constraint con
+              on con.conindid = idx.indexrelid
+             and con.conrelid = rel.oid
+           where nsp.nspname = 'public'
+             and rel.relname = 'orders'
+             and idx.indisunique
+             and idx.indnatts = 1
+             and att.attname = 'order_number'
+             and v_conflict_constraint in (idx_rel.relname, con.conname)
+        ) then
+          raise;
+        end if;
+        v_order.id := null;
+        if v_ins_attempt >= 25 then
+          raise exception 'Concurrent checkout order-number collision on "%". Please retry checkout.', coalesce(v_conflict_constraint, v_order_number);
+        end if;
+    end;
+  end loop;
+
+  if v_order.id is null then
+    raise exception 'Unable to allocate a unique 6-digit order number (AK-XXXXXX). Please retry checkout.';
+  end if;
 
   -- Insert server-resolved line items; each insert invokes order_items_decrement_stock trigger.
   for v_resolved_elem in
@@ -1406,10 +1872,10 @@ end;
 $$;
 
 revoke all on function public.create_order_atomic(
-  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text
 ) from public, anon;
 grant execute on function public.create_order_atomic(
-  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb
+  text, text, text, text, jsonb, text, integer, integer, integer, text, jsonb, text
 ) to authenticated;
 
 -- 6. Legacy empty-shell cleanup helper retained strictly scoped (cannot affect historical orders
@@ -1452,12 +1918,8 @@ revoke all on function public.discard_incomplete_order(uuid) from public, anon, 
 
 -- 7. Atomic & secure order cancellation RPC
 --    - Enforces authentication, ownership (customer own orders; admin any order), and status eligibility.
---    - Prevents duplicate cancellations and double restoration via FOR UPDATE + item-level flags.
---    - Safely skips stock restoration for historical orders where stock_deducted = false.
---    - Validates total stock_count (rejects NULL, < 0, or integer overflow > 2147483647) and
---      enforces exact size_stock restoration parity (rejects missing, ambiguous, non-numeric,
---      or overflowing size stock without partially updating total stock).
---    - Never marks an item restored unless the public.products update succeeded for 1 row.
+--    - Records cancellation metadata (reason, timestamp, actor, actor_user_id) and payment/refund status.
+--    - Does NOT automatically restore stock; inventory adjustments are managed manually by admin.
 create or replace function public.cancel_order(
   p_order_id uuid,
   p_reason text default null,
@@ -1472,33 +1934,9 @@ declare
   v_uid uuid;
   v_is_admin boolean;
   v_order public.orders%rowtype;
-  v_item record;
-  v_prod public.products%rowtype;
-  v_next_total_big bigint;
-  v_next_size_stock jsonb;
-  v_has_size_inventory boolean;
-  v_size_match_count integer;
-  v_size_key text;
-  v_size_val_type text;
-  v_size_val_text text;
-  v_curr_size_big bigint;
-  v_next_size_big bigint;
-  v_updated_rows integer;
-  v_item_error text;
   v_new_payment_status text;
   v_new_refund_status text;
   v_actor text;
-  v_restored_units integer := 0;
-  v_restored_items integer := 0;
-  v_failed_items integer := 0;
-  v_failed_units integer := 0;
-  v_failed_item_details jsonb := '[]'::jsonb;
-  v_deducted_count integer := 0;
-  v_restored_count integer := 0;
-  v_unrestored_count integer := 0;
-  v_order_stock_restored boolean := false;
-  v_order_restoration_status text := 'not_applicable';
-  v_warning text := null;
   v_updated_order public.orders%rowtype;
 begin
   v_uid := auth.uid();
@@ -1563,220 +2001,6 @@ begin
     v_actor := 'customer';
   end if;
 
-  -- Atomic idempotent stock restoration:
-  -- Only restores items where stock_deducted = true and stock_restored = false.
-  -- Historical pre-migration orders (stock_deducted = false) are NOT restocked.
-  if coalesce(v_order.stock_deducted, false) = true then
-    for v_item in
-      select oi.id,
-             oi.product_uuid,
-             oi.product_id,
-             oi.product_name,
-             oi.selected_size,
-             oi.quantity
-        from public.order_items oi
-       where oi.order_id = v_order.id
-         and coalesce(oi.stock_deducted, false) = true
-         and coalesce(oi.stock_restored, false) = false
-       order by coalesce(oi.product_uuid::text, oi.product_id), oi.id
-         for update of oi
-    loop
-      v_item_error := null;
-      v_size_match_count := 0;
-      v_size_key := null;
-      v_has_size_inventory := false;
-      v_next_total_big := null;
-
-      select p.*
-        into v_prod
-        from public.products p
-       where p.id = v_item.product_uuid
-          or p.id::text = v_item.product_id
-          or p.slug = v_item.product_id
-          or ('ak-' || p.slug) = v_item.product_id
-       order by case
-         when p.id = v_item.product_uuid then 1
-         when p.id::text = v_item.product_id then 2
-         when p.slug = v_item.product_id then 3
-         else 4
-       end
-       limit 1
-       for update;
-
-      if not found then
-        v_item_error := 'Product record no longer exists in public.products (deleted or missing).';
-      elsif v_item.quantity is null or v_item.quantity <= 0 then
-        v_item_error := pg_catalog.format(
-          'Order item has invalid quantity (%); refusing stock restoration.',
-          coalesce(v_item.quantity::text, 'NULL')
-        );
-      elsif v_prod.stock_count is null or v_prod.stock_count < 0 then
-        v_item_error := pg_catalog.format(
-          'Product "%" has an invalid total stock_count (%); refusing stock restoration.',
-          v_prod.name, coalesce(v_prod.stock_count::text, 'NULL')
-        );
-      else
-        v_next_total_big := v_prod.stock_count::bigint + v_item.quantity::bigint;
-        if v_next_total_big > 2147483647 then
-          v_item_error := pg_catalog.format(
-            'Restoring %s unit(s) to "%" would overflow integer stock_count (% + % > 2147483647).',
-            v_item.quantity, v_prod.name, v_prod.stock_count, v_item.quantity
-          );
-        end if;
-      end if;
-
-      if v_item_error is null then
-        v_next_size_stock := coalesce(v_prod.size_stock, '{}'::jsonb);
-
-        if pg_catalog.jsonb_typeof(v_next_size_stock) <> 'object' then
-          v_item_error := pg_catalog.format(
-            'Product "%" has invalid non-object size_stock; refusing partial total-only restoration.',
-            v_prod.name
-          );
-        else
-          select exists (
-            select 1 from pg_catalog.jsonb_object_keys(v_next_size_stock)
-          )
-            into v_has_size_inventory;
-
-          if v_has_size_inventory then
-            select pg_catalog.count(*)::integer, pg_catalog.min(k)
-              into v_size_match_count, v_size_key
-              from pg_catalog.jsonb_object_keys(v_next_size_stock) as k
-             where pg_catalog.lower(trim(k)) = pg_catalog.lower(trim(v_item.selected_size));
-
-            if v_size_match_count > 1 then
-              v_item_error := pg_catalog.format(
-                'Ambiguous size_stock keys matched "%" for "%"; refusing partial or ambiguous restoration.',
-                v_item.selected_size, v_prod.name
-              );
-            elsif v_size_match_count = 0 or v_size_key is null then
-              v_item_error := pg_catalog.format(
-                'Original size key "%" was not found in size_stock for "%"; refusing partial total-only restoration.',
-                v_item.selected_size, v_prod.name
-              );
-            else
-              v_size_val_type := pg_catalog.jsonb_typeof(v_next_size_stock -> v_size_key);
-              v_size_val_text := v_next_size_stock ->> v_size_key;
-
-              if v_size_val_type not in ('number', 'string')
-                 or v_size_val_text is null
-                 or v_size_val_text !~ '^\d+$'
-                 or pg_catalog.length(v_size_val_text) > 10 then
-                v_item_error := pg_catalog.format(
-                  'Invalid or non-numeric size_stock value (%) for "%" in size "%"; refusing partial total-only restoration.',
-                  coalesce(v_size_val_text, 'null'), v_prod.name, v_size_key
-                );
-              else
-                v_curr_size_big := v_size_val_text::bigint;
-                if v_curr_size_big < 0 or v_curr_size_big > 2147483647 then
-                  v_item_error := pg_catalog.format(
-                    'Out-of-range size_stock value (%) for "%" in size "%"; refusing partial total-only restoration.',
-                    v_size_val_text, v_prod.name, v_size_key
-                  );
-                else
-                  v_next_size_big := v_curr_size_big + v_item.quantity::bigint;
-                  if v_next_size_big > 2147483647 then
-                    v_item_error := pg_catalog.format(
-                      'Restoring %s unit(s) to "%" in size "%" would overflow integer size_stock (% + % > 2147483647).',
-                      v_item.quantity, v_prod.name, v_size_key, v_curr_size_big, v_item.quantity
-                    );
-                  else
-                    v_next_size_stock := pg_catalog.jsonb_set(
-                      v_next_size_stock,
-                      array[v_size_key],
-                      pg_catalog.to_jsonb(v_next_size_big::integer),
-                      true
-                    );
-                  end if;
-                end if;
-              end if;
-            end if;
-          end if;
-        end if;
-      end if;
-
-      if v_item_error is null then
-        update public.products
-           set stock_count = v_next_total_big::integer,
-               size_stock = v_next_size_stock,
-               updated_at = pg_catalog.now()
-         where id = v_prod.id
-           and stock_count is not null
-           and stock_count >= 0;
-
-        get diagnostics v_updated_rows = row_count;
-
-        if v_updated_rows <> 1 then
-          v_item_error := pg_catalog.format(
-            'Total stock_count update could not be performed for "%"; item was not marked restored.',
-            v_prod.name
-          );
-        end if;
-      end if;
-
-      if v_item_error is null then
-        update public.order_items
-           set product_uuid = coalesce(product_uuid, v_prod.id),
-               stock_restored = true,
-               stock_restoration_status = 'restored',
-               stock_restoration_error = null
-         where id = v_item.id;
-
-        v_restored_items := v_restored_items + 1;
-        v_restored_units := v_restored_units + v_item.quantity;
-      else
-        update public.order_items
-           set stock_restored = false,
-               stock_restoration_status = 'failed',
-               stock_restoration_error = v_item_error
-         where id = v_item.id;
-
-        v_failed_items := v_failed_items + 1;
-        v_failed_units := v_failed_units + v_item.quantity;
-        v_failed_item_details := v_failed_item_details || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'order_item_id', v_item.id,
-            'product_id', v_item.product_id,
-            'product_name', v_item.product_name,
-            'selected_size', v_item.selected_size,
-            'quantity', v_item.quantity,
-            'error', v_item_error
-          )
-        );
-      end if;
-    end loop;
-
-    -- Verify exact item-level restoration totals before setting order-level restoration flags
-    select
-      pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true),
-      pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true and coalesce(oi.stock_restored, false) = true),
-      pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true and coalesce(oi.stock_restored, false) = false)
-      into v_deducted_count, v_restored_count, v_unrestored_count
-      from public.order_items oi
-     where oi.order_id = v_order.id;
-
-    if v_deducted_count > 0 and v_unrestored_count = 0 then
-      v_order_stock_restored := true;
-      v_order_restoration_status := 'restored';
-    elsif v_restored_count > 0 and v_unrestored_count > 0 then
-      v_order_stock_restored := false;
-      v_order_restoration_status := 'partial';
-      v_warning := pg_catalog.format(
-        'Order cancelled, but stock restoration was incomplete: %s deducted item(s) could not be restored (check order_items.stock_restoration_error).',
-        v_unrestored_count
-      );
-    else
-      v_order_stock_restored := false;
-      v_order_restoration_status := 'failed';
-      v_warning := 'Order cancelled, but deducted stock could not be restored (check order_items.stock_restoration_error).';
-    end if;
-  else
-    -- Historical pre-migration order or un-seeded preview order
-    v_order_stock_restored := false;
-    v_order_restoration_status := 'not_applicable';
-  end if;
-
   update public.orders
      set order_status = 'cancelled',
          payment_status = v_new_payment_status,
@@ -1785,22 +2009,22 @@ begin
          cancelled_by = v_actor,
          cancelled_by_user_id = v_uid,
          cancellation_reason = nullif(trim(coalesce(p_reason, '')), ''),
-         stock_restored = v_order_stock_restored,
-         stock_restoration_status = v_order_restoration_status,
+         stock_restored = false,
+         stock_restoration_status = 'not_applicable',
          updated_at = pg_catalog.now()
    where id = v_order.id
   returning * into v_updated_order;
 
   return pg_catalog.jsonb_build_object(
     'order', pg_catalog.to_jsonb(v_updated_order),
-    'restored_units', v_restored_units,
-    'restored_items', v_restored_items,
-    'failed_items', v_failed_items,
-    'failed_units', v_failed_units,
-    'failed_item_details', v_failed_item_details,
-    'stock_restored', v_order_stock_restored,
-    'stock_restoration_status', v_order_restoration_status,
-    'warning', v_warning
+    'restored_units', 0,
+    'restored_items', 0,
+    'failed_items', 0,
+    'failed_units', 0,
+    'failed_item_details', '[]'::jsonb,
+    'stock_restored', false,
+    'stock_restoration_status', 'not_applicable',
+    'warning', null
   );
 end;
 $$;
@@ -1808,344 +2032,130 @@ $$;
 revoke all on function public.cancel_order(uuid, text, text) from public, anon;
 grant execute on function public.cancel_order(uuid, text, text) to authenticated;
 
--- 8. Admin-only atomic retry RPC for failed stock restoration items
---    - Enforces public.is_admin() so customers can never execute recovery.
---    - Locks public.orders, eligible public.order_items (stock_deducted = true,
---      stock_restored = false, stock_restoration_status = 'failed'), and target public.products.
---    - Validates total stock_count (rejects NULL, < 0, integer overflow > 2147483647),
---      enforces exact & unambiguous size_stock restoration parity (or sizes[] validation when
---      binding a replacement product without size_stock), and checks overflow safety.
---    - Never marks an item restored unless the public.products update succeeded for 1 row.
-create or replace function public.retry_failed_stock_restoration(
-  p_order_id uuid,
-  p_order_item_id uuid default null,
-  p_target_product_uuid uuid default null
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = pg_catalog
-as $$
+-- 8. Stock is managed manually by admin upon cancellation; drop obsolete retry RPC if present
+drop function if exists public.retry_failed_stock_restoration(uuid, uuid, uuid);
+
+-- 9. Post-migration verification of RLS status, permissive policies, table privileges & RPC security
+do $$
 declare
-  v_uid uuid;
-  v_order public.orders%rowtype;
-  v_item record;
-  v_prod public.products%rowtype;
-  v_next_total_big bigint;
-  v_next_size_stock jsonb;
-  v_has_size_inventory boolean;
-  v_size_match_count integer;
-  v_size_key text;
-  v_size_val_type text;
-  v_size_val_text text;
-  v_curr_size_big bigint;
-  v_next_size_big bigint;
-  v_updated_rows integer;
-  v_item_error text;
-  v_retried_items integer := 0;
-  v_restored_items integer := 0;
-  v_restored_units integer := 0;
-  v_failed_items integer := 0;
-  v_failed_item_details jsonb := '[]'::jsonb;
-  v_deducted_count integer := 0;
-  v_restored_count integer := 0;
-  v_unrestored_count integer := 0;
-  v_order_stock_restored boolean := false;
-  v_order_restoration_status text := 'not_applicable';
-  v_warning text := null;
-  v_updated_order public.orders%rowtype;
+  v_tbl text;
+  v_rel record;
+  v_bad_policies text;
+  v_owner_bypass boolean;
+  v_fn record;
+  v_rpc_name text;
 begin
-  v_uid := auth.uid();
-  if v_uid is null or not public.is_admin() then
-    raise exception 'Admin privileges required to retry failed stock restoration.';
-  end if;
+  -- Verify RLS enabled and no unbypassable FORCE RLS blocking create_order_atomic()
+  select exists (
+    select 1
+      from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+      join pg_catalog.pg_roles r on r.oid = p.proowner
+     where n.nspname = 'public'
+       and p.proname = 'create_order_atomic'
+       and (r.rolsuper or r.rolbypassrls)
+  )
+    into v_owner_bypass;
 
-  if p_target_product_uuid is not null and p_order_item_id is null then
-    raise exception 'p_order_item_id must be specified when providing p_target_product_uuid.';
-  end if;
-
-  -- Lock parent order to serialize concurrent retries/cancellations
-  select *
-    into v_order
-    from public.orders
-   where id = p_order_id
-   for update;
-
-  if not found then
-    raise exception 'Order not found.';
-  end if;
-
-  if v_order.order_status <> 'cancelled' then
-    raise exception 'Stock restoration retry applies only to cancelled orders (current status: %).', v_order.order_status;
-  end if;
-
-  if coalesce(v_order.stock_deducted, false) = false then
-    raise exception 'Order did not have stock deducted; nothing to restore.';
-  end if;
-
-  if p_target_product_uuid is not null then
-    perform 1
-      from public.products p
-     where p.id = p_target_product_uuid;
-
-    if not found then
-      raise exception 'Target product % does not exist in public.products.', p_target_product_uuid;
-    end if;
-  end if;
-
-  for v_item in
-    select oi.id,
-           oi.product_uuid,
-           oi.product_id,
-           oi.product_name,
-           oi.selected_size,
-           oi.quantity
-      from public.order_items oi
-     where oi.order_id = v_order.id
-       and (p_order_item_id is null or oi.id = p_order_item_id)
-       and coalesce(oi.stock_deducted, false) = true
-       and coalesce(oi.stock_restored, false) = false
-       and oi.stock_restoration_status = 'failed'
-     order by coalesce(oi.product_uuid::text, oi.product_id), oi.id
-       for update of oi
+  foreach v_tbl in array array['orders', 'order_items', 'products']
   loop
-    v_retried_items := v_retried_items + 1;
-    v_item_error := null;
-    v_size_match_count := 0;
-    v_size_key := null;
-    v_has_size_inventory := false;
-    v_next_total_big := null;
+    select c.relrowsecurity, c.relforcerowsecurity
+      into v_rel
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and c.relname = v_tbl;
 
-    if p_target_product_uuid is not null then
-      select p.*
-        into v_prod
-        from public.products p
-       where p.id = p_target_product_uuid
-       for update;
-    else
-      select p.*
-        into v_prod
-        from public.products p
-       where p.id = v_item.product_uuid
-          or p.id::text = v_item.product_id
-          or p.slug = v_item.product_id
-          or ('ak-' || p.slug) = v_item.product_id
-       order by case
-         when p.id = v_item.product_uuid then 1
-         when p.id::text = v_item.product_id then 2
-         when p.slug = v_item.product_id then 3
-         else 4
-       end
-       limit 1
-       for update;
+    if not coalesce(v_rel.relrowsecurity, false) then
+      raise exception 'Row Level Security is NOT enabled on public.%.', v_tbl;
     end if;
 
-    if not found then
-      v_item_error := 'Still unable to match a product record in public.products.';
-    elsif v_item.quantity is null or v_item.quantity <= 0 then
-      v_item_error := pg_catalog.format(
-        'Order item has invalid quantity (%); refusing stock restoration.',
-        coalesce(v_item.quantity::text, 'NULL')
-      );
-    elsif v_prod.stock_count is null or v_prod.stock_count < 0 then
-      v_item_error := pg_catalog.format(
-        'Product "%" has an invalid total stock_count (%); refusing stock restoration.',
-        v_prod.name, coalesce(v_prod.stock_count::text, 'NULL')
-      );
-    else
-      v_next_total_big := v_prod.stock_count::bigint + v_item.quantity::bigint;
-      if v_next_total_big > 2147483647 then
-        v_item_error := pg_catalog.format(
-          'Restoring %s unit(s) to "%" would overflow integer stock_count (% + % > 2147483647).',
-          v_item.quantity, v_prod.name, v_prod.stock_count, v_item.quantity
-        );
-      end if;
-    end if;
-
-    if v_item_error is null then
-      v_next_size_stock := coalesce(v_prod.size_stock, '{}'::jsonb);
-
-      if pg_catalog.jsonb_typeof(v_next_size_stock) <> 'object' then
-        v_item_error := pg_catalog.format(
-          'Product "%" has invalid non-object size_stock; refusing partial total-only restoration.',
-          v_prod.name
-        );
-      else
-        select exists (
-          select 1 from pg_catalog.jsonb_object_keys(v_next_size_stock)
-        )
-          into v_has_size_inventory;
-
-        if v_has_size_inventory then
-          select pg_catalog.count(*)::integer, pg_catalog.min(k)
-            into v_size_match_count, v_size_key
-            from pg_catalog.jsonb_object_keys(v_next_size_stock) as k
-           where pg_catalog.lower(trim(k)) = pg_catalog.lower(trim(v_item.selected_size));
-
-          if v_size_match_count > 1 then
-            v_item_error := pg_catalog.format(
-              'Ambiguous size_stock keys matched "%" for "%"; refusing partial or ambiguous restoration.',
-              v_item.selected_size, v_prod.name
-            );
-          elsif v_size_match_count = 0 or v_size_key is null then
-            v_item_error := pg_catalog.format(
-              'Original size key "%" was not found in size_stock for "%"; refusing partial total-only restoration.',
-              v_item.selected_size, v_prod.name
-            );
-          else
-            v_size_val_type := pg_catalog.jsonb_typeof(v_next_size_stock -> v_size_key);
-            v_size_val_text := v_next_size_stock ->> v_size_key;
-
-            if v_size_val_type not in ('number', 'string')
-               or v_size_val_text is null
-               or v_size_val_text !~ '^\d+$'
-               or pg_catalog.length(v_size_val_text) > 10 then
-              v_item_error := pg_catalog.format(
-                'Invalid or non-numeric size_stock value (%) for "%" in size "%"; refusing partial total-only restoration.',
-                coalesce(v_size_val_text, 'null'), v_prod.name, v_size_key
-              );
-            else
-              v_curr_size_big := v_size_val_text::bigint;
-              if v_curr_size_big < 0 or v_curr_size_big > 2147483647 then
-                v_item_error := pg_catalog.format(
-                  'Out-of-range size_stock value (%) for "%" in size "%"; refusing partial total-only restoration.',
-                  v_size_val_text, v_prod.name, v_size_key
-                );
-              else
-                v_next_size_big := v_curr_size_big + v_item.quantity::bigint;
-                if v_next_size_big > 2147483647 then
-                  v_item_error := pg_catalog.format(
-                    'Restoring %s unit(s) to "%" in size "%" would overflow integer size_stock (% + % > 2147483647).',
-                    v_item.quantity, v_prod.name, v_size_key, v_curr_size_big, v_item.quantity
-                  );
-                else
-                  v_next_size_stock := pg_catalog.jsonb_set(
-                    v_next_size_stock,
-                    array[v_size_key],
-                    pg_catalog.to_jsonb(v_next_size_big::integer),
-                    true
-                  );
-                end if;
-              end if;
-            end if;
-          end if;
-        elsif p_target_product_uuid is not null
-              and coalesce(pg_catalog.array_length(v_prod.sizes, 1), 0) > 0 then
-          if not exists (
-            select 1
-              from pg_catalog.unnest(v_prod.sizes) as sz
-             where pg_catalog.lower(trim(sz)) = pg_catalog.lower(trim(v_item.selected_size))
-          ) then
-            v_item_error := pg_catalog.format(
-              'Replacement product "%" does not support original size "%".',
-              v_prod.name, v_item.selected_size
-            );
-          end if;
-        end if;
-      end if;
-    end if;
-
-    if v_item_error is null then
-      update public.products
-         set stock_count = v_next_total_big::integer,
-             size_stock = v_next_size_stock,
-             updated_at = pg_catalog.now()
-       where id = v_prod.id
-         and stock_count is not null
-         and stock_count >= 0;
-
-      get diagnostics v_updated_rows = row_count;
-
-      if v_updated_rows <> 1 then
-        v_item_error := pg_catalog.format(
-          'Total stock_count update could not be performed for "%"; item was not marked restored.',
-          v_prod.name
-        );
-      end if;
-    end if;
-
-    if v_item_error is null then
-      update public.order_items
-         set product_uuid = v_prod.id,
-             stock_restored = true,
-             stock_restoration_status = 'restored',
-             stock_restoration_error = null
-       where id = v_item.id;
-
-      v_restored_items := v_restored_items + 1;
-      v_restored_units := v_restored_units + v_item.quantity;
-    else
-      update public.order_items
-         set stock_restored = false,
-             stock_restoration_status = 'failed',
-             stock_restoration_error = v_item_error
-       where id = v_item.id;
-
-      v_failed_items := v_failed_items + 1;
-      v_failed_item_details := v_failed_item_details || pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object(
-          'order_item_id', v_item.id,
-          'product_id', v_item.product_id,
-          'product_name', v_item.product_name,
-          'selected_size', v_item.selected_size,
-          'quantity', v_item.quantity,
-          'error', v_item_error
-        )
-      );
+    if coalesce(v_rel.relforcerowsecurity, false) and not coalesce(v_owner_bypass, false) then
+      raise exception 'FORCE ROW LEVEL SECURITY is enabled on public.% while create_order_atomic() owner lacks BYPASSRLS, which would block authenticated customer checkout.', v_tbl;
     end if;
   end loop;
 
-  if p_order_item_id is not null and v_retried_items = 0 then
-    raise exception 'Order item % is not eligible for retry (not found on order, not failed, or already restored).', p_order_item_id;
+  -- Verify zero non-admin permissive INSERT or FOR ALL policies remain on orders & order_items
+  select pg_catalog.string_agg(c.relname || '.' || p.polname || ' (cmd=' || p.polcmd || ')', ', ')
+    into v_bad_policies
+    from pg_catalog.pg_policy p
+    join pg_catalog.pg_class c on c.oid = p.polrelid
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in ('orders', 'order_items')
+     and p.polpermissive
+     and (
+       p.polcmd = '*'
+       or (
+         p.polcmd = 'a'
+         and p.polname not in ('Admins can insert orders', 'Admins can insert order items')
+       )
+     );
+
+  if v_bad_policies is not null then
+    raise exception 'Unexpected permissive INSERT/ALL policies still present: %', v_bad_policies;
   end if;
 
-  select
-    pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true),
-    pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true and coalesce(oi.stock_restored, false) = true),
-    pg_catalog.count(*) filter (where coalesce(oi.stock_deducted, false) = true and coalesce(oi.stock_restored, false) = false)
-    into v_deducted_count, v_restored_count, v_unrestored_count
-    from public.order_items oi
-   where oi.order_id = v_order.id;
-
-  if v_deducted_count > 0 and v_unrestored_count = 0 then
-    v_order_stock_restored := true;
-    v_order_restoration_status := 'restored';
-  elsif v_restored_count > 0 and v_unrestored_count > 0 then
-    v_order_stock_restored := false;
-    v_order_restoration_status := 'partial';
-    v_warning := pg_catalog.format(
-      '%s deducted item(s) still remain unrestored (check order_items.stock_restoration_error).',
-      v_unrestored_count
-    );
-  else
-    v_order_stock_restored := false;
-    v_order_restoration_status := 'failed';
-    v_warning := 'Deducted stock could not be restored (check order_items.stock_restoration_error).';
+  -- Verify anon & PUBLIC do not hold direct INSERT table privileges on orders or order_items
+  if pg_catalog.has_table_privilege('anon', 'public.orders', 'INSERT')
+     or pg_catalog.has_table_privilege('anon', 'public.order_items', 'INSERT') then
+    raise exception 'Role anon still has direct INSERT privilege on public.orders or public.order_items.';
   end if;
 
-  update public.orders
-     set stock_restored = v_order_stock_restored,
-         stock_restoration_status = v_order_restoration_status,
-         updated_at = pg_catalog.now()
-   where id = v_order.id
-  returning * into v_updated_order;
+  if exists (
+    select 1
+      from information_schema.role_table_grants g
+     where g.table_schema = 'public'
+       and g.table_name in ('orders', 'order_items')
+       and g.grantee = 'PUBLIC'
+       and g.privilege_type = 'INSERT'
+  ) then
+    raise exception 'PUBLIC still has direct INSERT privilege on public.orders or public.order_items.';
+  end if;
 
-  return pg_catalog.jsonb_build_object(
-    'order', pg_catalog.to_jsonb(v_updated_order),
-    'retried_items', v_retried_items,
-    'restored_items', v_restored_items,
-    'restored_units', v_restored_units,
-    'remaining_failed_items', v_unrestored_count,
-    'failed_item_details', v_failed_item_details,
-    'stock_restored', v_order_stock_restored,
-    'stock_restoration_status', v_order_restoration_status,
-    'warning', v_warning
-  );
-end;
-$$;
+  -- Verify RPC SECURITY DEFINER, safe search_path = pg_catalog, and execute grants
+  foreach v_rpc_name in array array[
+    'catalog_has_real_products',
+    'decrement_stock_on_order_item',
+    'create_order_atomic',
+    'discard_incomplete_order',
+    'cancel_order'
+  ]
+  loop
+    select p.oid, p.prosecdef, p.proconfig
+      into v_fn
+      from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.proname = v_rpc_name
+     limit 1;
 
-revoke all on function public.retry_failed_stock_restoration(uuid, uuid, uuid) from public, anon;
-grant execute on function public.retry_failed_stock_restoration(uuid, uuid, uuid) to authenticated;
+    if not found or not v_fn.prosecdef or not ('search_path=pg_catalog' = any(coalesce(v_fn.proconfig, array[]::text[]))) then
+      raise exception 'Function public.%() is missing SECURITY DEFINER or set search_path = pg_catalog.', v_rpc_name;
+    end if;
+
+    if v_rpc_name = 'catalog_has_real_products' then
+      if not pg_catalog.has_function_privilege('anon', v_fn.oid, 'EXECUTE')
+         or not pg_catalog.has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
+        raise exception 'Function public.%() must grant EXECUTE to anon and authenticated.', v_rpc_name;
+      end if;
+    else
+      if pg_catalog.has_function_privilege('anon', v_fn.oid, 'EXECUTE') then
+        raise exception 'Function public.%() must NOT grant EXECUTE to anon.', v_rpc_name;
+      end if;
+
+      if v_rpc_name in ('create_order_atomic', 'cancel_order')
+         and not pg_catalog.has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
+        raise exception 'Function public.%() must grant EXECUTE to authenticated.', v_rpc_name;
+      end if;
+
+      if v_rpc_name in ('decrement_stock_on_order_item', 'discard_incomplete_order')
+         and pg_catalog.has_function_privilege('authenticated', v_fn.oid, 'EXECUTE') then
+        raise exception 'Internal function public.%() must NOT grant EXECUTE to authenticated.', v_rpc_name;
+      end if;
+    end if;
+  end loop;
+end $$;
 
 -- Refresh PostgREST schema cache so the new RPCs and columns are immediately callable
 notify pgrst, 'reload schema';

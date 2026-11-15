@@ -106,6 +106,7 @@ export function AccountView({
   });
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -135,7 +136,11 @@ export function AccountView({
   const loadOrders = useCallback(async () => {
     if (!user) return;
     setLoadingOrders(true);
+    setOrdersError('');
     const res = await fetchCustomerOrders(user.id);
+    if (res.error) {
+      setOrdersError(res.error);
+    }
     setOrders(res.orders);
     setLoadingOrders(false);
   }, [user]);
@@ -347,6 +352,14 @@ export function AccountView({
 
           {loadingOrders ? (
             <p className="text-xs text-[#817b70]">Loading your orders...</p>
+          ) : ordersError ? (
+            <div className="p-4 bg-[#fdf2f0] border border-[#e6c2b8] text-xs text-[#9a3b26] flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Unable to load your orders</p>
+                <p className="mt-1">{ordersError}</p>
+              </div>
+            </div>
           ) : orders.length === 0 ? (
             <div className="py-12 text-center border border-dashed border-[#e5dfd3] bg-[#f5f2eb]/40">
               <p className="font-serif-display text-xl text-[#211f1b]">
@@ -511,12 +524,13 @@ export function AccountView({
               Cancel order <span className="tabular-nums">{cancelTarget.order_number}</span>?
             </h3>
             <p className="text-xs text-[#5f594f] mt-2 leading-relaxed">
-              This action cannot be undone. Reserved stock for{' '}
+              This action cannot be undone. Your cancellation reason and timestamp will be
+              saved on your order of{' '}
               <strong className="text-[#211f1b]">
                 {cancelTarget.order_items?.reduce((s, i) => s + i.quantity, 0) || 1}{' '}
                 item(s)
-              </strong>{' '}
-              will be returned to our inventory immediately.
+              </strong>
+              .
             </p>
 
             <div className="mt-4 p-3.5 bg-[#f5f2eb] border border-[#e5dfd3] text-xs text-[#5f594f] space-y-1">

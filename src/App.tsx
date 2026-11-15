@@ -11,9 +11,18 @@ import { Navbar } from './components/Navbar';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { ProductGrid } from './components/ProductGrid';
 import { StoryAndNewsletter } from './components/StoryAndNewsletter';
-import { PREVIEW_PRODUCTS } from './data/catalog';
+import { isDemoProductId } from './data/catalog';
 import { isSupabaseConfigured, supabase, SUPABASE_URL } from './lib/supabase';
-import { fetchActiveProducts, fetchUserProfile } from './services/storeService';
+import {
+  type CatalogFetchResult,
+  fetchActiveProducts,
+  fetchUserProfile,
+} from './services/storeService';
+import {
+  getAvailableStockForSize,
+  getConfiguredSizes,
+  getFirstAvailableSize,
+} from './utils/inventory';
 import type {
   AppView,
   AuthMode,
@@ -26,7 +35,7 @@ import type {
 const CART_STORAGE_KEY = 'apnaKapdaCart';
 
 export default function App() {
-  const [products, setProducts] = useState<Product[]>(PREVIEW_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [activeView, setActiveView] = useState<AppView>('storefront');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -35,7 +44,10 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
-      return saved ? (JSON.parse(saved) as CartItem[]) : [];
+      const parsed = saved ? (JSON.parse(saved) as CartItem[]) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((item) => !isDemoProductId(item.productId))
+        : [];
     } catch {
       return [];
     }
@@ -48,15 +60,33 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authNotice, setAuthNotice] = useState('');
 
+  const applyCatalogResult = useCallback((res: CatalogFetchResult) => {
+    setProducts(res.products);
+
+    const liveIds = new Set(res.products.map((p) => p.id));
+    setCart((prev) =>
+      prev.filter((item) => {
+        if (isDemoProductId(item.productId)) return false;
+        if (!res.warning && res.products.length > 0) {
+          return liveIds.has(item.productId);
+        }
+        return true;
+      })
+    );
+
+    setSelectedProduct((prev) => {
+      if (!prev) return null;
+      if (isDemoProductId(prev.id)) return null;
+      return res.products.find((p) => p.id === prev.id) ?? null;
+    });
+  }, []);
+
   const loadCatalog = useCallback(async () => {
     setLoadingProducts(true);
     const res = await fetchActiveProducts();
-    setProducts(res.products);
-    setSelectedProduct((prev) =>
-      prev ? res.products.find((p) => p.id === prev.id) ?? prev : null
-    );
+    applyCatalogResult(res);
     setLoadingProducts(false);
-  }, []);
+  }, [applyCatalogResult]);
 
   const loadProfile = useCallback(async (userId: string) => {
     const res = await fetchUserProfile(userId);
@@ -151,32 +181,55 @@ export default function App() {
   };
 
   const handleAddToCart = (product: Product, size?: string, qty = 1) => {
-    const chosenSize =
-      size || (product.sizes.includes('M') ? 'M' : product.sizes[0] || 'M');
+    if (isDemoProductId(product.id)) return;
+    const validSizes = getConfiguredSizes(product);
+    if (validSizes.length === 0) return;
+
+    const requested = size?.trim();
+    const chosenSize = requested
+      ? validSizes.find((s) => s.toLowerCase() === requested.toLowerCase())
+      : getFirstAvailableSize(product);
+
+    if (!chosenSize) return;
+
+    const availableStock = getAvailableStockForSize(product, chosenSize);
+    if (availableStock <= 0) return;
+
     setCart((prev) => {
       const existing = prev.find(
-        (item) => item.productId === product.id && item.size === chosenSize
+        (item) =>
+          item.productId === product.id &&
+          item.size.toLowerCase() === chosenSize.toLowerCase()
       );
       if (existing) {
+        const nextQty = Math.min(availableStock, existing.qty + Math.max(1, qty));
         return prev.map((item) =>
-          item.productId === product.id && item.size === chosenSize
-            ? { ...item, qty: item.qty + qty }
+          item.productId === product.id &&
+          item.size.toLowerCase() === chosenSize.toLowerCase()
+            ? { ...item, qty: nextQty }
             : item
         );
       }
-      return [...prev, { productId: product.id, size: chosenSize, qty }];
+      const initialQty = Math.min(availableStock, Math.max(1, qty));
+      return [...prev, { productId: product.id, size: chosenSize, qty: initialQty }];
     });
     setCartOpen(true);
   };
 
   const handleChangeCartQty = (productId: string, size: string, delta: number) => {
+    const prod = products.find((p) => p.id === productId);
+    const maxStock = prod ? getAvailableStockForSize(prod, size) : Infinity;
+
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.productId === productId && item.size === size
-            ? { ...item, qty: item.qty + delta }
-            : item
-        )
+        .map((item) => {
+          if (item.productId !== productId || item.size !== size) return item;
+          const nextQty = item.qty + delta;
+          if (delta > 0 && Number.isFinite(maxStock)) {
+            return { ...item, qty: Math.min(maxStock, nextQty) };
+          }
+          return { ...item, qty: nextQty };
+        })
         .filter((item) => item.qty > 0)
     );
   };

@@ -3,6 +3,7 @@ import {
   FREE_SHIPPING_THRESHOLD_INR,
   formatINR,
 } from '../data/catalog';
+import { getAvailableStockForSize } from '../utils/inventory';
 import type { CartItem, Product } from '../types';
 import { ResilientImage } from './ResilientImage';
 
@@ -109,65 +110,69 @@ export function CartDrawer({
               </p>
             </div>
           ) : (
-            itemsWithProduct.map(({ product, size, qty }) => (
-              <div
-                key={`${product.id}-${size}`}
-                className="grid grid-cols-[74px_1fr_auto] gap-3.5 py-4 items-start"
-              >
-                <div className="w-[74px] h-[94px] bg-[#e9e3d8] overflow-hidden">
-                  <ResilientImage
-                    src={product.image_url}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+            itemsWithProduct.map(({ product, size, qty }) => {
+              const maxStock = getAvailableStockForSize(product, size);
+              return (
+                <div
+                  key={`${product.id}-${size}`}
+                  className="grid grid-cols-[74px_1fr_auto] gap-3.5 py-4 items-start"
+                >
+                  <div className="w-[74px] h-[94px] bg-[#e9e3d8] overflow-hidden">
+                    <ResilientImage
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
-                <div className="min-w-0">
-                  <h4 className="text-xs font-semibold text-[#211f1b] truncate">
-                    {product.name}
-                  </h4>
-                  <p className="text-[11px] text-[#817b70] mt-0.5">
-                    Size: {size} &middot;{' '}
-                    <span className="tabular-nums">{formatINR(product.price_inr)}</span>
-                  </p>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-semibold text-[#211f1b] truncate">
+                      {product.name}
+                    </h4>
+                    <p className="text-[11px] text-[#817b70] mt-0.5">
+                      Size: {size} &middot;{' '}
+                      <span className="tabular-nums">{formatINR(product.price_inr)}</span>
+                    </p>
 
-                  <div className="inline-flex items-center border border-[#e5dfd3] mt-3">
-                    <button
-                      type="button"
-                      onClick={() => onChangeQty(product.id, size, -1)}
-                      aria-label={`Decrease ${product.name} quantity`}
-                      className="w-7 h-7 flex items-center justify-center text-[#211f1b] hover:bg-[#f5f2eb]"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-7 text-center text-xs font-medium tabular-nums">
-                      {qty}
+                    <div className="inline-flex items-center border border-[#e5dfd3] mt-3">
+                      <button
+                        type="button"
+                        onClick={() => onChangeQty(product.id, size, -1)}
+                        aria-label={`Decrease ${product.name} quantity`}
+                        className="w-7 h-7 flex items-center justify-center text-[#211f1b] hover:bg-[#f5f2eb]"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-7 text-center text-xs font-medium tabular-nums">
+                        {qty}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={qty >= maxStock}
+                        onClick={() => onChangeQty(product.id, size, 1)}
+                        aria-label={`Increase ${product.name} quantity`}
+                        className="w-7 h-7 flex items-center justify-center text-[#211f1b] hover:bg-[#f5f2eb] disabled:opacity-35"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-right flex flex-col items-end justify-between h-full">
+                    <span className="text-xs font-semibold text-[#211f1b] tabular-nums">
+                      {formatINR(product.price_inr * qty)}
                     </span>
                     <button
                       type="button"
-                      onClick={() => onChangeQty(product.id, size, 1)}
-                      aria-label={`Increase ${product.name} quantity`}
-                      className="w-7 h-7 flex items-center justify-center text-[#211f1b] hover:bg-[#f5f2eb]"
+                      onClick={() => onRemoveItem(product.id, size)}
+                      className="text-[11px] text-[#9a6746] hover:text-[#211f1b] underline underline-offset-2 mt-4"
                     >
-                      <Plus className="w-3 h-3" />
+                      Remove
                     </button>
                   </div>
                 </div>
-
-                <div className="text-right flex flex-col items-end justify-between h-full">
-                  <span className="text-xs font-semibold text-[#211f1b] tabular-nums">
-                    {formatINR(product.price_inr * qty)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemoveItem(product.id, size)}
-                    className="text-[11px] text-[#9a6746] hover:text-[#211f1b] underline underline-offset-2 mt-4"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -178,7 +183,7 @@ export function CartDrawer({
             <span>{formatINR(subtotal)}</span>
           </div>
           <p className="text-[11px] text-[#817b70] mt-1.5">
-            Shipping calculated at checkout. COD &amp; Order Reservation available.
+            Shipping calculated at checkout. Cash on Delivery (COD) available.
           </p>
           <button
             type="button"

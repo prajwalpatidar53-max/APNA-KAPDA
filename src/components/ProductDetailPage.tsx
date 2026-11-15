@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Ruler, ShieldCheck, Truck } from 'lucide-react';
 import { formatINR } from '../data/catalog';
+import {
+  getAvailableStockForSize,
+  getConfiguredSizes,
+  getFirstAvailableSize,
+  getTotalAvailableStock,
+} from '../utils/inventory';
 import type { Product } from '../types';
 import { ResilientImage } from './ResilientImage';
 import { SizeGuideModal } from './SizeGuideModal';
@@ -20,21 +26,31 @@ export function ProductDetailPage({
   onAddToCart,
   onSelectProduct,
 }: ProductDetailPageProps) {
-  const availableSizes = product.sizes.length ? product.sizes : ['S', 'M', 'L', 'XL'];
-  const [selectedSize, setSelectedSize] = useState<string>(
-    availableSizes.includes('M') ? 'M' : availableSizes[0]
+  const availableSizes = getConfiguredSizes(product);
+  const [selectedSize, setSelectedSize] = useState<string>(() =>
+    getFirstAvailableSize(product)
   );
   const [qty, setQty] = useState(1);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState(false);
 
   useEffect(() => {
-    const sizes = product.sizes.length ? product.sizes : ['S', 'M', 'L', 'XL'];
-    setSelectedSize(sizes.includes('M') ? 'M' : sizes[0]);
+    setSelectedSize(getFirstAvailableSize(product));
     setQty(1);
     setAddedFeedback(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [product]);
+
+  const selectedSizeStock = getAvailableStockForSize(product, selectedSize);
+  const overallAvailableStock = getTotalAvailableStock(product);
+
+  useEffect(() => {
+    if (selectedSizeStock > 0 && qty > selectedSizeStock) {
+      setQty(selectedSizeStock);
+    } else if (selectedSizeStock <= 0 && qty !== 1) {
+      setQty(1);
+    }
+  }, [selectedSizeStock, qty]);
 
   const discountPercent =
     product.compare_at_price_inr && product.compare_at_price_inr > product.price_inr
@@ -51,6 +67,7 @@ export function ProductDetailPage({
     product.garment_type.toLowerCase().includes('trouser');
 
   const handleAdd = () => {
+    if (!selectedSize || availableSizes.length === 0 || selectedSizeStock <= 0) return;
     onAddToCart(product, selectedSize, qty);
     setAddedFeedback(true);
     setTimeout(() => setAddedFeedback(false), 1800);
@@ -122,9 +139,11 @@ export function ProductDetailPage({
                 </>
               )}
             <span className="ml-auto text-[11px] text-[#5f594f]">
-              {product.stock_count > 0
-                ? `${product.stock_count} in stock`
-                : 'Currently sold out'}
+              {selectedSizeStock > 0
+                ? `${selectedSizeStock} in stock`
+                : overallAvailableStock > 0
+                  ? 'Selected size out of stock'
+                  : 'Currently sold out'}
             </span>
           </div>
 
@@ -149,20 +168,27 @@ export function ProductDetailPage({
             </div>
 
             <div className="grid grid-cols-6 gap-2">
-              {availableSizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => setSelectedSize(size)}
-                  className={`py-2.5 text-xs font-medium border transition-colors ${
-                    selectedSize === size
-                      ? 'bg-[#24231f] text-white border-[#24231f]'
-                      : 'bg-transparent text-[#211f1b] border-[#e5dfd3] hover:border-[#24231f]'
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+              {availableSizes.map((size) => {
+                const sizeStock = getAvailableStockForSize(product, size);
+                const sizeSoldOut = sizeStock <= 0;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={sizeSoldOut}
+                    onClick={() => setSelectedSize(size)}
+                    className={`py-2.5 text-xs font-medium border transition-colors ${
+                      sizeSoldOut
+                        ? 'bg-transparent text-[#a6a095] border-[#e5dfd3] opacity-50 line-through cursor-not-allowed'
+                        : selectedSize === size
+                          ? 'bg-[#24231f] text-white border-[#24231f]'
+                          : 'bg-transparent text-[#211f1b] border-[#e5dfd3] hover:border-[#24231f]'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -182,9 +208,12 @@ export function ProductDetailPage({
               </span>
               <button
                 type="button"
-                onClick={() => setQty((q) => Math.min(Math.max(1, product.stock_count), q + 1))}
+                disabled={selectedSizeStock <= 0 || qty >= selectedSizeStock}
+                onClick={() =>
+                  setQty((q) => Math.min(Math.max(1, selectedSizeStock), q + 1))
+                }
                 aria-label="Increase quantity"
-                className="w-10 h-12 flex items-center justify-center text-sm text-[#211f1b] hover:bg-[#e5dfd3]/50"
+                className="w-10 h-12 flex items-center justify-center text-sm text-[#211f1b] hover:bg-[#e5dfd3]/50 disabled:opacity-40"
               >
                 +
               </button>
@@ -192,7 +221,7 @@ export function ProductDetailPage({
 
             <button
               type="button"
-              disabled={product.stock_count <= 0}
+              disabled={selectedSizeStock <= 0 || availableSizes.length === 0 || !selectedSize}
               onClick={handleAdd}
               className="flex-1 bg-[#24231f] text-white border border-[#24231f] px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase font-medium hover:bg-[#9a6746] hover:border-[#9a6746] transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer"
             >
@@ -201,7 +230,9 @@ export function ProductDetailPage({
                   <Check className="w-4 h-4" />
                   <span>Added to Bag</span>
                 </>
-              ) : product.stock_count > 0 ? (
+              ) : availableSizes.length === 0 ? (
+                <span>Size Unavailable</span>
+              ) : selectedSizeStock > 0 ? (
                 <span>Add to Bag &mdash; {formatINR(product.price_inr * qty)}</span>
               ) : (
                 <span>Out of Stock</span>
@@ -226,7 +257,7 @@ export function ProductDetailPage({
             <div className="flex items-start gap-2.5">
               <ShieldCheck className="w-4 h-4 text-[#9a6746] shrink-0 mt-0.5" />
               <span>
-                Cash on Delivery (COD) and verified order reservation supported.
+                Cash on Delivery (COD) and verified order tracking supported.
               </span>
             </div>
           </div>

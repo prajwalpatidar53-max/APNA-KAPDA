@@ -25,7 +25,7 @@ export const BRAND_IMAGES = {
   } as Record<ProductCategory, string>,
 };
 
-export const PREVIEW_PRODUCTS: Product[] = [
+const DEMO_PREVIEW_PRODUCT_SEED: Product[] = [
   {
     id: 'ak-classic-oversized-tee',
     name: 'Classic Oversized Tee',
@@ -42,6 +42,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 42,
     image_url: prodOversizedTeeImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-everyday-linen-shirt',
@@ -59,6 +60,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 28,
     image_url: prodLinenShirtImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-modern-essential-top',
@@ -76,6 +78,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 34,
     image_url: prodEssentialTopImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-relaxed-fit-trousers',
@@ -93,6 +96,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 19,
     image_url: prodRelaxedTrousersImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-everyday-street-tee',
@@ -110,6 +114,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 39,
     image_url: prodStreetTeeImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-urban-layer-shirt',
@@ -127,6 +132,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 24,
     image_url: prodUrbanLayerImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-signature-denim',
@@ -144,6 +150,7 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 16,
     image_url: prodSignatureDenimImg,
     is_active: true,
+    is_demo: true,
   },
   {
     id: 'ak-minimal-daily-dress',
@@ -161,8 +168,22 @@ export const PREVIEW_PRODUCTS: Product[] = [
     stock_count: 21,
     image_url: prodDailyDressImg,
     is_active: true,
+    is_demo: true,
   },
 ];
+
+export const PREVIEW_PRODUCTS: Product[] = DEMO_PREVIEW_PRODUCT_SEED;
+
+export function isDemoProductId(productId?: string | null): boolean {
+  return typeof productId === 'string' && productId.trim().startsWith('ak-');
+}
+
+export function isDemoProduct(
+  product?: Pick<Product, 'id' | 'is_demo'> | null
+): boolean {
+  if (!product) return false;
+  return Boolean(product.is_demo) || isDemoProductId(product.id);
+}
 
 export const FREE_SHIPPING_THRESHOLD_INR = 1499;
 export const STANDARD_SHIPPING_FEE_INR = 99;

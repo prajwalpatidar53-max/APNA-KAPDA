@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowUpRight, Search, SlidersHorizontal } from 'lucide-react';
 import { formatINR } from '../data/catalog';
+import { getTotalAvailableStock } from '../utils/inventory';
 import type { CategoryFilter, Product } from '../types';
 import { ResilientImage } from './ResilientImage';
 
@@ -143,25 +144,35 @@ export function ProductGrid({
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-16 border border-dashed border-[#e5dfd3] bg-[#f5f2eb]/40">
-            <p className="font-serif-display text-2xl text-[#211f1b]">No pieces match your filter.</p>
-            <p className="text-xs text-[#817b70] mt-2">
-              Try clearing your search or switching back to all collections.
+            <p className="font-serif-display text-2xl text-[#211f1b]">
+              {products.length === 0
+                ? 'No products published yet.'
+                : 'No pieces match your filter.'}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                onCategoryChange('All');
-                setSelectedType('All');
-                setSearchQuery('');
-              }}
-              className="mt-5 px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase"
-            >
-              Reset Filters
-            </button>
+            <p className="text-xs text-[#817b70] mt-2">
+              {products.length === 0
+                ? 'Add or publish products in the Admin Portal to display your live collection.'
+                : 'Try clearing your search or switching back to all collections.'}
+            </p>
+            {products.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCategoryChange('All');
+                  setSelectedType('All');
+                  setSearchQuery('');
+                }}
+                className="mt-5 px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product) => {
+              const availableStock = getTotalAvailableStock(product);
+              return (
               <article
                 key={product.id}
                 className="group min-w-0 flex flex-col transition-transform duration-200 hover:-translate-y-0.5"
@@ -190,10 +201,10 @@ export function ProductGrid({
                     <button
                       type="button"
                       onClick={() => onQuickAdd(product)}
-                      disabled={product.stock_count <= 0}
+                      disabled={availableStock <= 0}
                       className="flex-1 bg-[#fffdf8] text-[#211f1b] hover:bg-[#24231f] hover:text-white py-2.5 px-3 text-[10px] tracking-[0.14em] uppercase font-medium transition-colors disabled:opacity-50"
                     >
-                      {product.stock_count > 0 ? 'Add to Bag +' : 'Out of Stock'}
+                      {availableStock > 0 ? 'Add to Bag +' : 'Out of Stock'}
                     </button>
                     <button
                       type="button"
@@ -233,7 +244,8 @@ export function ProductGrid({
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -57,6 +57,7 @@ export interface Product {
   image_url: string;
   gallery_images?: string[];
   is_active: boolean;
+  is_demo?: boolean;
   created_at?: string;
 }
 
@@ -97,6 +98,12 @@ export type OrderItemStockRestorationStatus =
   | 'restored'
   | 'failed';
 
+export type OrderItemStockTrackingMode =
+  | 'legacy'
+  | 'total_only'
+  | 'size_stock'
+  | 'none';
+
 export interface OrderItem {
   id?: string;
   order_id?: string;
@@ -111,6 +118,7 @@ export interface OrderItem {
   stock_restored?: boolean;
   stock_restoration_status?: OrderItemStockRestorationStatus;
   stock_restoration_error?: string | null;
+  stock_tracking_mode?: OrderItemStockTrackingMode;
   created_at?: string;
 }
 

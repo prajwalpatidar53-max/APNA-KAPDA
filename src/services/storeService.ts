@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured, SUPABASE_URL } from '../lib/supabase';
-import { PREVIEW_PRODUCTS } from '../data/catalog';
+import { isDemoProductId, PREVIEW_PRODUCTS } from '../data/catalog';
 import {
   normalizeProductImages,
   resolveProductImageUrl,
@@ -17,7 +17,7 @@ import type {
 
 export interface CatalogFetchResult {
   products: Product[];
-  source: 'supabase' | 'preview';
+  source: 'supabase';
   warning?: string;
 }
 
@@ -44,9 +44,28 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+function deduplicateSizesCaseInsensitive(sizes: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of sizes) {
+    const clean = raw.trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(clean);
+  }
+  return result;
+}
+
 export async function fetchActiveProducts(): Promise<CatalogFetchResult> {
   if (!supabase || !isSupabaseConfigured) {
-    return { products: PREVIEW_PRODUCTS, source: 'preview' };
+    return {
+      products: [],
+      source: 'supabase',
+      warning:
+        'Supabase is not configured. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to load products.',
+    };
   }
 
   const { data, error } = await supabase
@@ -56,31 +75,26 @@ export async function fetchActiveProducts(): Promise<CatalogFetchResult> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    if (error.code === 'PGRST205' || error.code === '42P01') {
-      console.warn(
-        '[APNA KAPDA] public.products table is not provisioned yet; displaying editorial preview catalog. Run supabase/schema.sql in Supabase SQL Editor.'
-      );
-    } else {
-      logDbError('fetchActiveProducts', 'products', error);
-    }
+    logDbError('fetchActiveProducts', 'products', error);
     return {
-      products: PREVIEW_PRODUCTS,
-      source: 'preview',
-      warning: `Showing preview catalog (${error.message}). Run supabase/schema.sql in your Supabase SQL Editor.`,
+      products: [],
+      source: 'supabase',
+      warning: `Unable to load live products (${error.message}). Ensure supabase/schema.sql has been applied in Supabase.`,
     };
   }
 
   if (!data || data.length === 0) {
     return {
-      products: PREVIEW_PRODUCTS,
-      source: 'preview',
-      warning:
-        'Supabase products table is empty — showing editorial preview catalog until products are added.',
+      products: [],
+      source: 'supabase',
+      warning: 'No active products are currently published in Supabase.',
     };
   }
 
   return {
-    products: (data as Product[]).map(normalizeProductImages),
+    products: (data as Product[]).map((p) =>
+      normalizeProductImages({ ...p, is_demo: false })
+    ),
     source: 'supabase',
   };
 }
@@ -90,7 +104,7 @@ export async function fetchAllProductsAdmin(): Promise<{
   error?: string;
 }> {
   if (!supabase || !isSupabaseConfigured) {
-    return { products: PREVIEW_PRODUCTS };
+    return { products: [], error: 'Supabase is not configured.' };
   }
 
   const { data, error } = await supabase
@@ -120,6 +134,12 @@ export async function saveProductAdmin(
     };
   }
 
+  const cleanSizes = deduplicateSizesCaseInsensitive(productInput.sizes);
+
+  if (cleanSizes.length === 0) {
+    return { error: 'At least one valid garment size is required.' };
+  }
+
   const payload = {
     name: productInput.name.trim(),
     slug:
@@ -134,7 +154,7 @@ export async function saveProductAdmin(
       : null,
     tag: productInput.tag.trim().toUpperCase() || 'NEW',
     fabric_care: productInput.fabric_care.trim(),
-    sizes: productInput.sizes.length ? productInput.sizes : ['S', 'M', 'L', 'XL'],
+    sizes: cleanSizes,
     stock_count: Number(productInput.stock_count),
     image_url: productInput.image_url.trim(),
     is_active: productInput.is_active,
@@ -288,6 +308,7 @@ export async function createOrder(params: {
   shippingInr: number;
   totalInr: number;
   notes?: string;
+  idempotencyKey?: string;
   items: OrderItem[];
 }): Promise<{ order?: Order; error?: string }> {
   if (!supabase || !isSupabaseConfigured) {
@@ -297,37 +318,73 @@ export async function createOrder(params: {
     };
   }
 
+  if (!params.items || params.items.length === 0) {
+    return { error: 'Your shopping bag is empty.' };
+  }
+
   const uuidRegex =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  for (const item of params.items) {
+    if (isDemoProductId(item.product_id)) {
+      return {
+        error: `"${item.product_name}" is a demo item and cannot be checked out. Please select live products from the store.`,
+      };
+    }
+    if (!item.selected_size || !item.selected_size.trim()) {
+      return {
+        error: `Please select a valid size for "${item.product_name}" before placing your order.`,
+      };
+    }
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      return {
+        error: `Invalid quantity selected for "${item.product_name}".`,
+      };
+    }
+  }
 
   const rpcItems = params.items.map((item) => ({
     product_uuid: uuidRegex.test(item.product_id) ? item.product_id : null,
     product_id: item.product_id,
     product_name: item.product_name,
     product_image: item.product_image || null,
-    selected_size: item.selected_size,
+    selected_size: item.selected_size.trim(),
     unit_price_inr: item.unit_price_inr,
     quantity: item.quantity,
   }));
 
-  // Single authoritative checkout path: single-transaction atomic order + line items + server pricing/shipping + stock validation.
-  // Passing p_order_number: null lets PostgreSQL generate the authoritative unique AK-XXXXXX order number.
-  const { data: atomicData, error: atomicError } = await supabase.rpc(
+  const baseRpcArgs = {
+    p_order_number: null,
+    p_customer_name: params.customerName.trim(),
+    p_customer_email: params.customerEmail.trim(),
+    p_customer_phone: params.customerPhone.trim(),
+    p_shipping_address: params.shippingAddress,
+    p_payment_method: params.paymentMethod,
+    p_subtotal_inr: params.subtotalInr,
+    p_shipping_inr: params.shippingInr,
+    p_total_inr: params.totalInr,
+    p_notes: params.notes?.trim() || null,
+    p_items: rpcItems,
+  };
+
+  let { data: atomicData, error: atomicError } = await supabase.rpc(
     'create_order_atomic',
     {
-      p_order_number: null,
-      p_customer_name: params.customerName.trim(),
-      p_customer_email: params.customerEmail.trim(),
-      p_customer_phone: params.customerPhone.trim(),
-      p_shipping_address: params.shippingAddress,
-      p_payment_method: params.paymentMethod,
-      p_subtotal_inr: params.subtotalInr,
-      p_shipping_inr: params.shippingInr,
-      p_total_inr: params.totalInr,
-      p_notes: params.notes?.trim() || null,
-      p_items: rpcItems,
+      ...baseRpcArgs,
+      p_idempotency_key: params.idempotencyKey?.trim() || null,
     }
   );
+
+  // Backward-compatible fallback if Supabase still has the 11-arg create_order_atomic signature
+  // before the updated SQL migration is executed manually.
+  if (
+    atomicError?.code === 'PGRST202' &&
+    atomicError.message.includes('p_idempotency_key')
+  ) {
+    const legacyCall = await supabase.rpc('create_order_atomic', baseRpcArgs);
+    atomicData = legacyCall.data;
+    atomicError = legacyCall.error;
+  }
 
   if (atomicError) {
     if (atomicError.code === '42883' || atomicError.code === 'PGRST202') {
@@ -365,7 +422,9 @@ export async function createOrder(params: {
 export async function fetchCustomerOrders(
   userId: string
 ): Promise<{ orders: Order[]; error?: string }> {
-  if (!supabase || !isSupabaseConfigured) return { orders: [] };
+  if (!supabase || !isSupabaseConfigured) {
+    return { orders: [], error: 'Supabase is not configured.' };
+  }
 
   const { data, error } = await supabase
     .from('orders')
@@ -392,8 +451,6 @@ export async function cancelCustomerOrder(
   reason?: string
 ): Promise<{
   order?: Order;
-  restoredUnits?: number;
-  stockRestorationStatus?: Order['stock_restoration_status'];
   warning?: string;
   error?: string;
 }> {
@@ -420,14 +477,10 @@ export async function cancelCustomerOrder(
 
   const payload = data as {
     order?: Order;
-    restored_units?: number;
-    stock_restoration_status?: Order['stock_restoration_status'];
     warning?: string | null;
   } | null;
   return {
     order: payload?.order,
-    restoredUnits: payload?.restored_units ?? 0,
-    stockRestorationStatus: payload?.stock_restoration_status,
     warning: payload?.warning ?? undefined,
   };
 }

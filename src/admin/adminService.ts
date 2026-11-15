@@ -256,6 +256,7 @@ export async function fetchAdminProducts(): Promise<{
   const normalized = ((data ?? []) as Product[]).map((item) =>
     normalizeProductImages({
       ...item,
+      is_demo: false,
       colors: Array.isArray(item.colors) ? item.colors : [],
       gallery_images:
         Array.isArray(item.gallery_images) && item.gallery_images.length > 0
@@ -303,6 +304,20 @@ export async function saveAdminProduct(
     return { error: 'At least one product image is required.' };
   }
 
+  const seenSizes = new Set<string>();
+  const cleanSizes: string[] = [];
+  for (const raw of input.sizes) {
+    const clean = raw.trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seenSizes.has(key)) continue;
+    seenSizes.add(key);
+    cleanSizes.push(clean);
+  }
+  if (cleanSizes.length === 0) {
+    return { error: 'At least one garment size is required.' };
+  }
+
   const basePayload = {
     name: input.name.trim(),
     slug:
@@ -318,7 +333,7 @@ export async function saveAdminProduct(
         : null,
     tag: input.tag.trim().toUpperCase() || 'NEW DROP',
     fabric_care: input.fabric_care.trim(),
-    sizes: input.sizes.length ? input.sizes : ['S', 'M', 'L', 'XL'],
+    sizes: cleanSizes,
     stock_count: Math.max(0, Math.round(Number(input.stock_count))),
     image_url: coverImage,
     is_active: input.is_active,
@@ -533,8 +548,6 @@ export async function cancelOrderAdmin(
   reason?: string
 ): Promise<{
   order?: Order;
-  restoredUnits?: number;
-  stockRestorationStatus?: Order['stock_restoration_status'];
   warning?: string;
   error?: string;
 }> {
@@ -561,76 +574,10 @@ export async function cancelOrderAdmin(
 
   const payload = data as {
     order?: Order;
-    restored_units?: number;
-    stock_restoration_status?: Order['stock_restoration_status'];
     warning?: string | null;
   } | null;
   return {
     order: payload?.order,
-    restoredUnits: payload?.restored_units ?? 0,
-    stockRestorationStatus: payload?.stock_restoration_status,
-    warning: payload?.warning ?? undefined,
-  };
-}
-
-export interface RetryStockRestorationResult {
-  order?: Order;
-  retriedItems?: number;
-  restoredItems?: number;
-  restoredUnits?: number;
-  remainingFailedItems?: number;
-  stockRestorationStatus?: Order['stock_restoration_status'];
-  warning?: string;
-  error?: string;
-}
-
-export async function retryFailedStockRestorationAdmin(params: {
-  orderId: string;
-  orderItemId?: string | null;
-  targetProductUuid?: string | null;
-}): Promise<RetryStockRestorationResult> {
-  if (!supabase || !isSupabaseConfigured) {
-    return { error: 'Supabase is not configured.' };
-  }
-
-  const { data, error } = await supabase.rpc('retry_failed_stock_restoration', {
-    p_order_id: params.orderId,
-    p_order_item_id: params.orderItemId ?? null,
-    p_target_product_uuid: params.targetProductUuid ?? null,
-  });
-
-  if (error) {
-    if (error.code === '42883' || error.code === 'PGRST202') {
-      return {
-        error:
-          'Stock restoration retry RPC is not installed yet. Run supabase/order_cancellation_migration.sql in Supabase SQL Editor.',
-      };
-    }
-    logAdminError(
-      'retryFailedStockRestorationAdmin',
-      'rpc/retry_failed_stock_restoration',
-      error
-    );
-    return { error: error.message };
-  }
-
-  const payload = data as {
-    order?: Order;
-    retried_items?: number;
-    restored_items?: number;
-    restored_units?: number;
-    remaining_failed_items?: number;
-    stock_restoration_status?: Order['stock_restoration_status'];
-    warning?: string | null;
-  } | null;
-
-  return {
-    order: payload?.order,
-    retriedItems: payload?.retried_items ?? 0,
-    restoredItems: payload?.restored_items ?? 0,
-    restoredUnits: payload?.restored_units ?? 0,
-    remainingFailedItems: payload?.remaining_failed_items ?? 0,
-    stockRestorationStatus: payload?.stock_restoration_status,
     warning: payload?.warning ?? undefined,
   };
 }

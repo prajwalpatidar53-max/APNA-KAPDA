@@ -151,7 +151,7 @@ export function AdminProducts({
         : '',
       tag: product.tag || 'NEW DROP',
       stock_count: String(product.stock_count),
-      sizes: product.sizes.length ? product.sizes : ['S', 'M', 'L', 'XL'],
+      sizes: Array.isArray(product.sizes) ? product.sizes.map((s) => s.trim()).filter(Boolean) : [],
       colors: Array.isArray(product.colors) ? product.colors : [],
       fabric_care: product.fabric_care || '',
       description: product.description || '',
@@ -253,6 +253,15 @@ export function AdminProducts({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validSizes = form.sizes.map((s) => s.trim()).filter(Boolean);
+    if (validSizes.length === 0) {
+      setFeedback({
+        type: 'err',
+        text: 'Select at least one garment size before saving.',
+      });
+      return;
+    }
+
     if (form.gallery_images.length === 0) {
       setFeedback({
         type: 'err',

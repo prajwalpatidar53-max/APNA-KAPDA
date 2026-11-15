@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Lock, ShieldCheck, Truck } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   FREE_SHIPPING_THRESHOLD_INR,
   STANDARD_SHIPPING_FEE_INR,
   formatINR,
+  isDemoProductId,
 } from '../data/catalog';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { createOrder, updateUserProfile } from '../services/storeService';
+import { getAvailableStockForSize, getConfiguredSizes } from '../utils/inventory';
 import type {
   CartItem,
   Order,
@@ -29,6 +31,21 @@ interface CheckoutViewProps {
   onViewOrders: () => void;
 }
 
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `ak-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function normalizeIndianPhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  return null;
+}
+
 export function CheckoutView({
   user,
   profile,
@@ -40,6 +57,9 @@ export function CheckoutView({
   onViewOrders,
 }: CheckoutViewProps) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [customerEmail, setCustomerEmail] = useState(
+    user?.email || profile?.email || ''
+  );
   const [phone, setPhone] = useState(profile?.phone || '');
   const [address, setAddress] = useState<ShippingAddress>({
     line1: profile?.default_address?.line1 || '',
@@ -55,9 +75,19 @@ export function CheckoutView({
   const [errorMsg, setErrorMsg] = useState('');
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
 
+  const isSubmittingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
+
+  useEffect(() => {
+    if (user?.email) {
+      setCustomerEmail((prev) => prev || user.email || '');
+    }
+  }, [user?.email]);
+
   useEffect(() => {
     if (profile) {
       setFullName((prev) => prev || profile.full_name);
+      setCustomerEmail((prev) => prev || profile.email || '');
       setPhone((prev) => prev || profile.phone);
       setAddress((prev) => ({
         line1: prev.line1 || profile.default_address?.line1 || '',
@@ -68,6 +98,19 @@ export function CheckoutView({
       }));
     }
   }, [profile]);
+
+  const cartSignature = useMemo(
+    () =>
+      cart
+        .map((c) => `${c.productId}:${c.size}:${c.qty}`)
+        .sort()
+        .join('|'),
+    [cart]
+  );
+
+  useEffect(() => {
+    idempotencyKeyRef.current = generateIdempotencyKey();
+  }, [cartSignature, paymentMethod]);
 
   const itemsWithProduct = cart
     .map((item) => ({
@@ -87,13 +130,14 @@ export function CheckoutView({
   const total = subtotal + shippingFee;
 
   if (placedOrder) {
+    const confirmedItems = placedOrder.order_items ?? [];
     return (
       <div className="max-w-3xl mx-auto px-[5%] py-14">
         <div className="bg-[#fffdf8] border border-[#e5dfd3] p-8 sm:p-10">
           <div className="flex items-center gap-3 text-[#9a6746]">
             <CheckCircle2 className="w-6 h-6" />
             <span className="text-[11px] tracking-[0.22em] uppercase font-bold">
-              Order Recorded
+              Order Confirmed
             </span>
           </div>
 
@@ -101,11 +145,20 @@ export function CheckoutView({
             Thank you, {placedOrder.customer_name}.
           </h1>
           <p className="text-xs sm:text-sm text-[#5f594f] mt-2 leading-relaxed">
-            Your order <strong className="text-[#211f1b] tabular-nums">{placedOrder.order_number}</strong>{' '}
-            has been saved to your APNA KAPDA account.
+            Your order{' '}
+            <strong className="text-[#211f1b] tabular-nums">
+              {placedOrder.order_number}
+            </strong>{' '}
+            has been saved permanently to your APNA KAPDA account.
           </p>
 
-          <div className="mt-6 p-4 bg-[#f5f2eb] border border-[#e5dfd3] text-xs space-y-2">
+          <div className="mt-6 p-4 sm:p-5 bg-[#f5f2eb] border border-[#e5dfd3] text-xs space-y-2.5">
+            <div className="flex justify-between">
+              <span className="text-[#817b70]">Order Number</span>
+              <span className="font-bold text-[#211f1b] tabular-nums">
+                {placedOrder.order_number}
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="text-[#817b70]">Order Status</span>
               <span className="font-semibold text-[#211f1b] uppercase tracking-wider">
@@ -117,7 +170,7 @@ export function CheckoutView({
               <span className="font-semibold text-[#211f1b]">
                 {placedOrder.payment_method === 'cod'
                   ? 'Cash on Delivery (COD)'
-                  : 'Reserved — Online Payment Pending'}
+                  : 'Online Payment Reservation'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -125,22 +178,77 @@ export function CheckoutView({
               <span className="font-semibold text-[#9a6746] uppercase tracking-wider">
                 {placedOrder.payment_status === 'cod_due'
                   ? 'Pay on Delivery'
-                  : 'Awaiting Payment Gateway'}
+                  : 'Awaiting Payment'}
               </span>
             </div>
-            <div className="flex justify-between pt-2 border-t border-[#e5dfd3] tabular-nums">
-              <span className="font-semibold text-[#211f1b]">Total Amount</span>
-              <span className="font-bold text-[#211f1b]">
-                {formatINR(placedOrder.total_inr)}
+            <div className="pt-2 border-t border-[#e5dfd3] flex flex-col sm:flex-row sm:justify-between gap-1">
+              <span className="text-[#817b70]">Deliver To</span>
+              <span className="text-[#211f1b] sm:text-right">
+                {placedOrder.shipping_address.line1}
+                {placedOrder.shipping_address.line2
+                  ? `, ${placedOrder.shipping_address.line2}`
+                  : ''}
+                , {placedOrder.shipping_address.city},{' '}
+                {placedOrder.shipping_address.state} &ndash;{' '}
+                <span className="tabular-nums">
+                  {placedOrder.shipping_address.pincode}
+                </span>
+              </span>
+            </div>
+            <div className="flex justify-between text-[#5f594f]">
+              <span>Contact</span>
+              <span className="text-[#211f1b] tabular-nums">
+                {placedOrder.customer_email} &middot; {placedOrder.customer_phone}
               </span>
             </div>
           </div>
 
+          {confirmedItems.length > 0 && (
+            <div className="mt-5 border border-[#e5dfd3] divide-y divide-[#e5dfd3] text-xs">
+              {confirmedItems.map((item, idx) => (
+                <div
+                  key={item.id ?? `${item.product_id}-${idx}`}
+                  className="p-3.5 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#211f1b] truncate">
+                      {item.product_name}
+                    </p>
+                    <p className="text-[11px] text-[#817b70] tabular-nums mt-0.5">
+                      Size {item.selected_size} &times; {item.quantity}
+                    </p>
+                  </div>
+                  <span className="font-semibold text-[#211f1b] tabular-nums">
+                    {formatINR(item.unit_price_inr * item.quantity)}
+                  </span>
+                </div>
+              ))}
+              <div className="p-3.5 bg-[#f5f2eb]/40 space-y-1.5 tabular-nums">
+                <div className="flex justify-between text-[#5f594f]">
+                  <span>Subtotal</span>
+                  <span>{formatINR(placedOrder.subtotal_inr)}</span>
+                </div>
+                <div className="flex justify-between text-[#5f594f]">
+                  <span>Shipping</span>
+                  <span>
+                    {placedOrder.shipping_inr === 0
+                      ? 'Complimentary'
+                      : formatINR(placedOrder.shipping_inr)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-bold text-[#211f1b] pt-1.5 border-t border-[#e5dfd3]">
+                  <span>Total Amount</span>
+                  <span>{formatINR(placedOrder.total_inr)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {placedOrder.payment_method === 'online_pending' && (
             <p className="text-xs text-[#69645b] mt-4 leading-relaxed">
-              Your order is saved with <strong>Awaiting Payment</strong> status. No
-              card or UPI charge was simulated; connect your live Razorpay/Stripe
-              server webhook to collect online payments securely.
+              Your order is recorded with <strong>Awaiting Payment</strong> status. No
+              online payment was collected or simulated because an online payment
+              gateway is not currently connected.
             </p>
           )}
 
@@ -148,14 +256,14 @@ export function CheckoutView({
             <button
               type="button"
               onClick={onViewOrders}
-              className="bg-[#24231f] text-white px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#9a6746] transition-colors"
+              className="bg-[#24231f] text-white px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#9a6746] transition-colors cursor-pointer"
             >
               View My Orders
             </button>
             <button
               type="button"
               onClick={onBack}
-              className="border border-[#24231f] text-[#211f1b] px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#24231f] hover:text-white transition-colors"
+              className="border border-[#24231f] text-[#211f1b] px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#24231f] hover:text-white transition-colors cursor-pointer"
             >
               Continue Shopping
             </button>
@@ -167,6 +275,7 @@ export function CheckoutView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || submitting) return;
     setErrorMsg('');
 
     if (!user) {
@@ -176,67 +285,149 @@ export function CheckoutView({
 
     if (!isSupabaseConfigured) {
       setErrorMsg(
-        'Supabase is not configured yet. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to save real orders.'
+        'Supabase is not configured yet. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to place orders.'
       );
       return;
     }
 
-    if (itemsWithProduct.length === 0) {
-      setErrorMsg('Your shopping bag is empty.');
+    if (itemsWithProduct.length === 0 || itemsWithProduct.length !== cart.length) {
+      setErrorMsg(
+        itemsWithProduct.length === 0
+          ? 'Your shopping bag is empty.'
+          : 'Some items in your bag are no longer available. Please review your bag and try again.'
+      );
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
+    const trimmedName = fullName.trim();
+    if (trimmedName.length < 2) {
+      setErrorMsg('Please enter your full name for delivery.');
+      return;
+    }
+
+    const trimmedEmail = (customerEmail || user.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address for order confirmation.');
+      return;
+    }
+
+    const cleanPhone = normalizeIndianPhone(phone);
+    if (!cleanPhone) {
       setErrorMsg('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
-    if (!/^\d{6}$/.test(address.pincode.trim())) {
+    const cleanAddress: ShippingAddress = {
+      line1: address.line1.trim(),
+      line2: address.line2?.trim() || '',
+      city: address.city.trim(),
+      state: address.state.trim(),
+      pincode: address.pincode.trim(),
+    };
+
+    if (!cleanAddress.line1 || !cleanAddress.city || !cleanAddress.state) {
+      setErrorMsg('Please complete your street address, city, and state.');
+      return;
+    }
+
+    if (!/^\d{6}$/.test(cleanAddress.pincode)) {
       setErrorMsg('Please enter a valid 6-digit Indian PIN code.');
       return;
     }
 
+    for (const entry of itemsWithProduct) {
+      if (isDemoProductId(entry.product.id)) {
+        setErrorMsg(
+          `"${entry.product.name}" is not a live store product. Please remove it and add products from the live catalog.`
+        );
+        return;
+      }
+
+      const configuredSizes = getConfiguredSizes(entry.product);
+      const selectedSize = entry.size.trim();
+
+      if (configuredSizes.length === 0) {
+        setErrorMsg(
+          `"${entry.product.name}" does not have valid sizes configured and cannot be ordered right now.`
+        );
+        return;
+      }
+
+      if (
+        !selectedSize ||
+        !configuredSizes.some(
+          (s) => s.toLowerCase() === selectedSize.toLowerCase()
+        )
+      ) {
+        setErrorMsg(
+          `Selected size "${entry.size || 'None'}" is invalid for "${entry.product.name}".`
+        );
+        return;
+      }
+
+      const available = getAvailableStockForSize(entry.product, selectedSize);
+      if (available < entry.qty) {
+        setErrorMsg(
+          available <= 0
+            ? `"${entry.product.name}" (Size ${selectedSize}) is currently out of stock.`
+            : `Only ${available} unit(s) available for "${entry.product.name}" in size ${selectedSize}.`
+        );
+        return;
+      }
+    }
+
+    isSubmittingRef.current = true;
     setSubmitting(true);
 
-    if (saveAddressToProfile) {
-      await updateUserProfile(user.id, {
-        full_name: fullName,
-        phone: cleanPhone,
-        default_address: address,
+    try {
+      if (saveAddressToProfile) {
+        const profileRes = await updateUserProfile(user.id, {
+          full_name: trimmedName,
+          phone: cleanPhone,
+          default_address: cleanAddress,
+        });
+        if (profileRes.error) {
+          console.warn(
+            '[APNA KAPDA Checkout Profile Save Warning]',
+            profileRes.error
+          );
+        }
+      }
+
+      const result = await createOrder({
+        userId: user.id,
+        customerName: trimmedName,
+        customerEmail: trimmedEmail,
+        customerPhone: cleanPhone,
+        shippingAddress: cleanAddress,
+        paymentMethod,
+        subtotalInr: subtotal,
+        shippingInr: shippingFee,
+        totalInr: total,
+        notes: notes.trim(),
+        idempotencyKey: idempotencyKeyRef.current,
+        items: itemsWithProduct.map((entry) => ({
+          product_id: entry.product.id,
+          product_name: entry.product.name,
+          product_image: entry.product.image_url,
+          selected_size: entry.size.trim(),
+          unit_price_inr: entry.product.price_inr,
+          quantity: entry.qty,
+        })),
       });
+
+      if (result.error || !result.order) {
+        setErrorMsg(result.error || 'Could not place order.');
+        return;
+      }
+
+      idempotencyKeyRef.current = generateIdempotencyKey();
+      setPlacedOrder(result.order);
+      onOrderCreated(result.order);
+    } finally {
+      isSubmittingRef.current = false;
+      setSubmitting(false);
     }
-
-    const result = await createOrder({
-      userId: user.id,
-      customerName: fullName,
-      customerEmail: user.email || '',
-      customerPhone: cleanPhone,
-      shippingAddress: address,
-      paymentMethod,
-      subtotalInr: subtotal,
-      shippingInr: shippingFee,
-      totalInr: total,
-      notes,
-      items: itemsWithProduct.map((entry) => ({
-        product_id: entry.product.id,
-        product_name: entry.product.name,
-        product_image: entry.product.image_url,
-        selected_size: entry.size,
-        unit_price_inr: entry.product.price_inr,
-        quantity: entry.qty,
-      })),
-    });
-
-    setSubmitting(false);
-
-    if (result.error || !result.order) {
-      setErrorMsg(result.error || 'Could not place order.');
-      return;
-    }
-
-    setPlacedOrder(result.order);
-    onOrderCreated(result.order);
   };
 
   return (
@@ -308,6 +499,20 @@ export function CheckoutView({
                     className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746] tabular-nums"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                />
               </div>
 
               <div>
@@ -427,12 +632,12 @@ export function CheckoutView({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-[#211f1b]">
-                        Reserve Order (Pay Later)
+                        Online Payment (Pending Gateway)
                       </span>
                       <ShieldCheck className="w-4 h-4 text-[#9a6746]" />
                     </div>
                     <p className="text-[11px] text-[#817b70] mt-1.5 leading-relaxed">
-                      Saves order as awaiting online payment until gateway checkout completes.
+                      Saves order as awaiting online payment — no charge is simulated without a live gateway.
                     </p>
                   </button>
                 </div>
@@ -463,10 +668,10 @@ export function CheckoutView({
                 className="w-full bg-[#24231f] text-white py-4 px-6 text-[11px] tracking-[0.2em] uppercase font-medium hover:bg-[#9a6746] transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {submitting
-                  ? 'Recording Order...'
+                  ? 'Placing Order...'
                   : paymentMethod === 'cod'
                     ? `Place COD Order — ${formatINR(total)}`
-                    : `Reserve Order (Pending Payment) — ${formatINR(total)}`}
+                    : `Save Order (Awaiting Online Payment) — ${formatINR(total)}`}
               </button>
             </form>
           )}
