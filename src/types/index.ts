@@ -198,6 +198,8 @@ export interface Order {
   applied_offer_title?: string | null;
   total_inr: number;
   notes?: string | null;
+  idempotency_key?: string | null;
+  is_test_order?: boolean;
   cancelled_at?: string | null;
   cancelled_by?: 'customer' | 'admin' | null;
   cancelled_by_user_id?: string | null;

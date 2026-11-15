@@ -5,18 +5,25 @@ import {
   ExternalLink,
   FileDown,
   Filter,
+  FlaskConical,
   Loader2,
   MapPin,
   Printer,
   RotateCcw,
   Save,
   Settings2,
+  Trash2,
   Truck,
   X,
 } from 'lucide-react';
 import { formatINR } from '../data/catalog';
 import type { Order, OrderStatus, PaymentStatus } from '../types';
-import { bulkMarkOrdersShippedAdmin } from './adminService';
+import {
+  type BulkTestOrderSummary,
+  bulkMarkOrdersShippedAdmin,
+  createShippingTestOrdersAdmin,
+  deleteShippingTestOrdersAdmin,
+} from './adminService';
 import { loadBrowserPdfFonts } from './shipping/shippingFonts';
 import {
   generateBulkOrderSheetPdf,
@@ -135,6 +142,15 @@ export function AdminBulkShipping({
 
   const [shipConfirmOpen, setShipConfirmOpen] = useState(false);
   const [markingShipped, setMarkingShipped] = useState(false);
+
+  const [qaPanelOpen, setQaPanelOpen] = useState(false);
+  const [qaAction, setQaAction] = useState<'create' | 'delete' | null>(null);
+  const [qaConfirmDelete, setQaConfirmDelete] = useState(false);
+  const [qaFeedback, setQaFeedback] = useState<{
+    type: 'ok' | 'err';
+    text: string;
+  } | null>(null);
+  const [qaGeneratedOrders, setQaGeneratedOrders] = useState<BulkTestOrderSummary[]>([]);
 
   // Prune selected IDs that no longer exist in loaded Supabase orders
   useEffect(() => {
@@ -421,6 +437,52 @@ export function AdminBulkShipping({
     await onRefresh();
   };
 
+  const handleGenerateTestOrders = async () => {
+    if (qaAction !== null) return;
+    setQaAction('create');
+    setQaFeedback(null);
+    setQaConfirmDelete(false);
+
+    const res = await createShippingTestOrdersAdmin();
+    setQaAction(null);
+
+    if (res.error) {
+      setQaFeedback({ type: 'err', text: res.error });
+      return;
+    }
+
+    setQaGeneratedOrders(res.orders);
+    setQaFeedback({
+      type: 'ok',
+      text: `Ready: ${res.total_count} isolated QA test orders (${res.created_count} newly created, ${res.existing_count} already present). Product stock was not deducted.`,
+    });
+    await onRefresh();
+  };
+
+  const handleDeleteTestOrders = async () => {
+    if (qaAction !== null) return;
+    setQaAction('delete');
+    setQaFeedback(null);
+
+    const res = await deleteShippingTestOrdersAdmin();
+    setQaAction(null);
+    setQaConfirmDelete(false);
+
+    if (res.error) {
+      setQaFeedback({ type: 'err', text: res.error });
+      return;
+    }
+
+    setQaGeneratedOrders([]);
+    setQaFeedback({
+      type: 'ok',
+      text: `Removed ${res.deleted_count} QA test ${
+        res.deleted_count === 1 ? 'order' : 'orders'
+      }. Real customer orders and product inventory remain untouched.`,
+    });
+    await onRefresh();
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Section Header + Sender Config Toggle */}
@@ -437,28 +499,183 @@ export function AdminBulkShipping({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setSenderPanelOpen((v) => !v)}
-          className={`inline-flex items-center gap-2.5 px-4 py-2.5 border text-[10px] tracking-[0.16em] uppercase font-semibold transition-colors cursor-pointer shrink-0 ${
-            senderValidation.valid
-              ? 'border-[#e5dfd3] bg-[#f5f2eb]/70 text-[#211f1b] hover:border-[#24231f]'
-              : 'border-[#f59e0b] bg-[#fffbeb] text-[#92400e]'
-          }`}
-        >
-          <Settings2 className="w-3.5 h-3.5 text-[#9a6746]" />
-          <span>Sender Settings</span>
-          <span
-            className={`px-1.5 py-0.5 text-[9px] font-bold ${
-              senderValidation.valid
-                ? 'bg-[#ecfdf5] text-[#2b6345] border border-[#a7f3d0]'
-                : 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setQaPanelOpen((v) => !v)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 border text-[10px] tracking-[0.16em] uppercase font-semibold transition-colors cursor-pointer ${
+              qaPanelOpen
+                ? 'border-[#24231f] bg-[#24231f] text-white'
+                : 'border-[#e5dfd3] bg-[#f5f2eb]/70 text-[#211f1b] hover:border-[#24231f]'
             }`}
           >
-            {senderValidation.valid ? 'Ready' : 'Required'}
-          </span>
-        </button>
+            <FlaskConical className="w-3.5 h-3.5 text-[#9a6746]" />
+            <span>QA Test Orders</span>
+            {stats.testOrdersCount > 0 && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#fffbeb] text-[#92400e] border border-[#fde68a] tabular-nums">
+                {stats.testOrdersCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSenderPanelOpen((v) => !v)}
+            className={`inline-flex items-center gap-2.5 px-4 py-2.5 border text-[10px] tracking-[0.16em] uppercase font-semibold transition-colors cursor-pointer shrink-0 ${
+              senderValidation.valid
+                ? 'border-[#e5dfd3] bg-[#f5f2eb]/70 text-[#211f1b] hover:border-[#24231f]'
+                : 'border-[#f59e0b] bg-[#fffbeb] text-[#92400e]'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5 text-[#9a6746]" />
+            <span>Sender Settings</span>
+            <span
+              className={`px-1.5 py-0.5 text-[9px] font-bold ${
+                senderValidation.valid
+                  ? 'bg-[#ecfdf5] text-[#2b6345] border border-[#a7f3d0]'
+                  : 'bg-[#fef2f2] text-[#b91c1c] border border-[#fecaca]'
+              }`}
+            >
+              {senderValidation.valid ? 'Ready' : 'Required'}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {/* Collapsible QA Test Orders Generator / Cleanup Panel */}
+      {qaPanelOpen && (
+        <section className="bg-[#fffdf8] border border-[#d6c2a8] p-5 sm:p-6 space-y-4">
+          <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#e5dfd3]">
+            <div>
+              <p className="text-[10px] tracking-[0.2em] uppercase text-[#9a6746] font-bold">
+                Bulk Shipping QA Utility
+              </p>
+              <h2 className="font-serif-display text-xl text-[#211f1b] mt-1">
+                Isolated 20-Order Shipping Test Suite
+              </h2>
+              <p className="text-xs text-[#5f594f] mt-1 leading-relaxed">
+                Seeds or clears 20 clearly marked <code className="text-[#211f1b] font-semibold">is_test_order = true</code> orders (<code className="text-[#211f1b]">AK-910001</code>&ndash;<code className="text-[#211f1b]">AK-910020</code>) across 20 Indian cities using existing catalog products and prices. Inventory stock is never deducted, and revenue analytics and customer accounts ignore test orders.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQaPanelOpen(false)}
+              aria-label="Close QA test orders panel"
+              className="p-1.5 text-[#817b70] hover:text-[#211f1b] cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={qaAction !== null}
+              onClick={handleGenerateTestOrders}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {qaAction === 'create' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FlaskConical className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {qaAction === 'create'
+                  ? 'Creating Test Orders...'
+                  : 'Generate 20 Test Orders'}
+              </span>
+            </button>
+
+            {stats.testOrdersCount > 0 && !qaConfirmDelete && (
+              <button
+                type="button"
+                disabled={qaAction !== null}
+                onClick={() => setQaConfirmDelete(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-[#b91c1c] text-[#b91c1c] text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#fef2f2] transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove All Test Orders ({stats.testOrdersCount})</span>
+              </button>
+            )}
+
+            {qaConfirmDelete && (
+              <div className="inline-flex flex-wrap items-center gap-2 bg-[#fef2f2] border border-[#fecaca] px-3 py-1.5 text-xs">
+                <span className="text-[#b91c1c] font-semibold">
+                  Delete {stats.testOrdersCount} QA test orders?
+                </span>
+                <button
+                  type="button"
+                  disabled={qaAction !== null}
+                  onClick={handleDeleteTestOrders}
+                  className="px-2.5 py-1 bg-[#b91c1c] text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-[#991b1b] cursor-pointer disabled:opacity-50"
+                >
+                  {qaAction === 'delete' ? 'Removing...' : 'Confirm Remove'}
+                </button>
+                <button
+                  type="button"
+                  disabled={qaAction !== null}
+                  onClick={() => setQaConfirmDelete(false)}
+                  className="px-2.5 py-1 border border-[#e5dfd3] bg-[#fffdf8] text-[#5f594f] text-[10px] tracking-[0.12em] uppercase font-semibold hover:text-[#211f1b] cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
+          {qaFeedback && (
+            <p
+              className={`text-xs p-3 border ${
+                qaFeedback.type === 'err'
+                  ? 'bg-[#fef2f2] border-[#fecaca] text-[#b91c1c]'
+                  : 'bg-[#ecfdf5] border-[#a7f3d0] text-[#2b6345]'
+              }`}
+            >
+              {qaFeedback.text}
+            </p>
+          )}
+
+          {qaGeneratedOrders.length > 0 && (
+            <div className="border border-[#e5dfd3] max-h-64 overflow-y-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="sticky top-0 bg-[#f5f2eb] border-b border-[#e5dfd3] text-[10px] tracking-[0.14em] uppercase text-[#817b70]">
+                  <tr>
+                    <th className="py-2 px-3 font-semibold">Order #</th>
+                    <th className="py-2 px-3 font-semibold">Order UUID</th>
+                    <th className="py-2 px-3 font-semibold">Customer</th>
+                    <th className="py-2 px-3 font-semibold">City &amp; PIN</th>
+                    <th className="py-2 px-3 font-semibold">Status</th>
+                    <th className="py-2 px-3 font-semibold text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5dfd3]">
+                  {qaGeneratedOrders.map((row) => (
+                    <tr key={row.id}>
+                      <td className="py-2 px-3 font-semibold text-[#211f1b] tabular-nums whitespace-nowrap">
+                        {row.order_number}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-[#5f594f] whitespace-nowrap">
+                        {row.id}
+                      </td>
+                      <td className="py-2 px-3 text-[#211f1b]">{row.customer_name}</td>
+                      <td className="py-2 px-3 text-[#5f594f] whitespace-nowrap">
+                        {row.city}, {row.state} &ndash; {row.pincode}
+                      </td>
+                      <td className="py-2 px-3 capitalize text-[#5f594f] whitespace-nowrap">
+                        {row.order_status} &middot;{' '}
+                        {row.payment_method === 'cod' ? 'COD' : 'Online'}
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold text-[#211f1b] tabular-nums">
+                        {formatINR(row.total_inr)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Configurable APNA KAPDA Sender Dispatch Settings */}
       {senderPanelOpen && (
@@ -632,7 +849,11 @@ export function AdminBulkShipping({
             {loading ? '—' : stats.totalOrders}
           </p>
           <p className="text-[11px] text-[#5f594f] mt-2">
-            Synced directly from Supabase orders
+            {stats.testOrdersCount > 0
+              ? `Includes ${stats.testOrdersCount} QA test ${
+                  stats.testOrdersCount === 1 ? 'order' : 'orders'
+                }`
+              : 'Synced directly from Supabase orders'}
           </p>
         </div>
 
@@ -877,6 +1098,27 @@ export function AdminBulkShipping({
                   {p.replace('_', ' ')}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] tracking-[0.12em] uppercase text-[#817b70] mb-1">
+              Order Scope
+            </label>
+            <select
+              value={filters.orderScope}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  orderScope: e.target.value as ShippingFiltersState['orderScope'],
+                }))
+              }
+              aria-label="Filter shipping orders by scope"
+              className="w-full px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+            >
+              <option value="all">All Orders (Live &amp; QA Test)</option>
+              <option value="live">Live Customer Orders</option>
+              <option value="test">QA Test Orders Only</option>
             </select>
           </div>
         </div>
@@ -1146,9 +1388,16 @@ export function AdminBulkShipping({
                         </td>
 
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
-                          <p className="font-semibold text-[#211f1b] tabular-nums">
-                            {order.order_number}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-semibold text-[#211f1b] tabular-nums">
+                              {order.order_number}
+                            </p>
+                            {order.is_test_order && (
+                              <span className="px-1.5 py-0.5 text-[9px] tracking-[0.12em] uppercase font-bold bg-[#fffbeb] text-[#92400e] border border-[#fde68a]">
+                                TEST
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-[#817b70] mt-0.5 tabular-nums">
                             {formatOrderTimestamp(order.created_at)}
                           </p>
@@ -1274,9 +1523,16 @@ export function AdminBulkShipping({
                           className="accent-[#24231f] w-4 h-4 mt-0.5"
                         />
                         <div>
-                          <p className="text-xs font-bold text-[#211f1b] tabular-nums">
-                            {order.order_number}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-[#211f1b] tabular-nums">
+                              {order.order_number}
+                            </p>
+                            {order.is_test_order && (
+                              <span className="px-1.5 py-0.5 text-[9px] tracking-[0.12em] uppercase font-bold bg-[#fffbeb] text-[#92400e] border border-[#fde68a]">
+                                TEST
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-[#817b70]">
                             {formatOrderTimestamp(order.created_at)}
                           </p>

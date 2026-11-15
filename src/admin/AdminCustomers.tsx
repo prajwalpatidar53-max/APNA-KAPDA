@@ -35,7 +35,7 @@ export function AdminCustomers({
   const ordersByUser = useMemo(() => {
     const map = new Map<string, Order[]>();
     for (const order of orders) {
-      if (!order.user_id) continue;
+      if (order.is_test_order || !order.user_id) continue;
       const list = map.get(order.user_id) ?? [];
       list.push(order);
       map.set(order.user_id, list);

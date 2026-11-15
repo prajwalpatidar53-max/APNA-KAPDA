@@ -45,8 +45,16 @@ export function AdminAnalytics({
   onNavigateTab,
   onInspectOrder,
 }: AdminAnalyticsProps) {
+  const { liveOrders, testOrdersCount } = useMemo(() => {
+    const live = orders.filter((o) => !o.is_test_order);
+    return {
+      liveOrders: live,
+      testOrdersCount: orders.length - live.length,
+    };
+  }, [orders]);
+
   const metrics = useMemo(() => {
-    const activeOrders = orders.filter((o) => o.order_status !== 'cancelled');
+    const activeOrders = liveOrders.filter((o) => o.order_status !== 'cancelled');
 
     const verifiedPaidRevenue = activeOrders
       .filter((o) => o.payment_status === 'paid')
@@ -62,10 +70,10 @@ export function AdminAnalytics({
       .filter((o) => o.payment_status === 'awaiting_payment')
       .reduce((sum, o) => sum + Number(o.total_inr || 0), 0);
 
-    const pendingOrdersCount = orders.filter(
+    const pendingOrdersCount = liveOrders.filter(
       (o) => o.order_status === 'pending'
     ).length;
-    const deliveredOrdersCount = orders.filter(
+    const deliveredOrdersCount = liveOrders.filter(
       (o) => o.order_status === 'delivered'
     ).length;
 
@@ -73,7 +81,7 @@ export function AdminAnalytics({
     const activeProductsCount = products.filter((p) => p.is_active).length;
 
     return {
-      totalOrders: orders.length,
+      totalOrders: liveOrders.length,
       verifiedPaidRevenue,
       codAmountDue,
       awaitingOnlineAmount,
@@ -83,7 +91,7 @@ export function AdminAnalytics({
       activeProductsCount,
       lowStockProducts,
     };
-  }, [orders, products]);
+  }, [liveOrders, products]);
 
   const monthlySeries = useMemo<MonthBucket[]>(() => {
     const now = new Date();
@@ -110,7 +118,7 @@ export function AdminAnalytics({
 
     const bucketMap = new Map(buckets.map((b) => [b.key, b]));
 
-    for (const order of orders) {
+    for (const order of liveOrders) {
       if (order.order_status === 'cancelled') continue;
       const dt = new Date(order.created_at);
       if (Number.isNaN(dt.getTime())) continue;
@@ -133,7 +141,7 @@ export function AdminAnalytics({
     }
 
     return buckets;
-  }, [orders]);
+  }, [liveOrders]);
 
   const maxChartValue = useMemo(() => {
     const maxVal = monthlySeries.reduce(
@@ -143,10 +151,19 @@ export function AdminAnalytics({
     return maxVal > 0 ? maxVal : 1;
   }, [monthlySeries]);
 
-  const recentOrders = useMemo(() => orders.slice(0, 6), [orders]);
+  const recentOrders = useMemo(() => liveOrders.slice(0, 6), [liveOrders]);
 
   return (
     <div className="space-y-6">
+      {testOrdersCount > 0 && (
+        <div className="bg-[#f9f4ec] border border-[#d6c2a8] px-4 py-3 text-xs text-[#5f594f] flex flex-wrap items-center justify-between gap-2">
+          <span>
+            <strong className="text-[#211f1b] tabular-nums">{testOrdersCount}</strong>{' '}
+            Shipping QA test {testOrdersCount === 1 ? 'order is' : 'orders are'} excluded from revenue reports, sales ledgers, and customer order metrics.
+          </span>
+        </div>
+      )}
+
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-[#fffdf8] border border-[#e5dfd3] p-5">

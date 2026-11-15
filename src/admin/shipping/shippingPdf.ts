@@ -281,7 +281,7 @@ export async function generateBulkOrderSheetPdf(
     doc.setFontSize(9);
     doc.setTextColor(255, 253, 248);
     doc.text(
-      `#${idx + 1}   ${order.order_number}   •   ${formatOrderTimestamp(order.created_at)}`,
+      `#${idx + 1}   ${order.order_number}${order.is_test_order ? '  [TEST ORDER]' : ''}   •   ${formatOrderTimestamp(order.created_at)}`,
       marginX + 3,
       cursorY + 5.7
     );
@@ -578,8 +578,14 @@ function drawShippingLabelCard(
 
   doc.setFont(fontName, 'normal');
   doc.setFontSize(6.5);
-  doc.setTextColor(129, 123, 112);
-  doc.text('DISPATCH SHIPPING LABEL', x + pad, y + 10.6);
+  doc.setTextColor(order.is_test_order ? 154 : 129, order.is_test_order ? 103 : 123, order.is_test_order ? 70 : 112);
+  doc.text(
+    order.is_test_order
+      ? 'TEST SHIPPING LABEL  •  DO NOT DISPATCH'
+      : 'DISPATCH SHIPPING LABEL',
+    x + pad,
+    y + 10.6
+  );
 
   doc.setFont(fontName, 'bold');
   doc.setFontSize(9.5);

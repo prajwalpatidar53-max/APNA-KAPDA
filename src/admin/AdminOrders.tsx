@@ -141,6 +141,7 @@ export function AdminOrders({
   const [search, setSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | OrderStatus>('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | PaymentStatus>('all');
+  const [orderScopeFilter, setOrderScopeFilter] = useState<'all' | 'live' | 'test'>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [editOrderStatus, setEditOrderStatus] = useState<OrderStatus>('pending');
@@ -189,6 +190,9 @@ export function AdminOrders({
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter((o) => {
+      const matchScope =
+        orderScopeFilter === 'all' ||
+        (orderScopeFilter === 'test' ? Boolean(o.is_test_order) : !o.is_test_order);
       const matchOrderStatus =
         orderStatusFilter === 'all' || o.order_status === orderStatusFilter;
       const matchPaymentStatus =
@@ -199,9 +203,9 @@ export function AdminOrders({
         o.customer_name.toLowerCase().includes(q) ||
         o.customer_email.toLowerCase().includes(q) ||
         o.customer_phone.toLowerCase().includes(q);
-      return matchOrderStatus && matchPaymentStatus && matchQuery;
+      return matchScope && matchOrderStatus && matchPaymentStatus && matchQuery;
     });
-  }, [orders, search, orderStatusFilter, paymentStatusFilter]);
+  }, [orders, search, orderStatusFilter, paymentStatusFilter, orderScopeFilter]);
 
   const openOrderDrawer = (order: Order) => {
     setSelectedOrder(order);
@@ -337,6 +341,19 @@ export function AdminOrders({
               </option>
             ))}
           </select>
+
+          <select
+            value={orderScopeFilter}
+            onChange={(e) =>
+              setOrderScopeFilter(e.target.value as 'all' | 'live' | 'test')
+            }
+            aria-label="Filter by order scope"
+            className="px-3 py-2 text-xs bg-[#fffdf8] border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+          >
+            <option value="all">All Orders (Live &amp; QA Test)</option>
+            <option value="live">Live Customer Orders</option>
+            <option value="test">QA Test Orders Only</option>
+          </select>
         </div>
 
         <p className="text-[11px] text-[#817b70] tabular-nums">
@@ -408,7 +425,14 @@ export function AdminOrders({
                       className="hover:bg-[#f5f2eb]/50 transition-colors cursor-pointer"
                     >
                       <td className="py-3.5 px-4 font-semibold text-[#211f1b] tabular-nums whitespace-nowrap">
-                        {order.order_number}
+                        <div className="flex items-center gap-2">
+                          <span>{order.order_number}</span>
+                          {order.is_test_order && (
+                            <span className="px-1.5 py-0.5 text-[9px] tracking-[0.12em] uppercase font-bold bg-[#fffbeb] text-[#92400e] border border-[#fde68a]">
+                              TEST
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-3 text-[#5f594f] tabular-nums whitespace-nowrap">
                         {formatDateTime(order.created_at)}
@@ -496,9 +520,22 @@ export function AdminOrders({
             </div>
 
             <div className="p-6 space-y-6 flex-1">
-              <p className="text-xs text-[#817b70] tabular-nums">
-                Placed on {formatDateTime(selectedOrder.created_at)}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-[#817b70] tabular-nums">
+                  Placed on {formatDateTime(selectedOrder.created_at)}
+                </p>
+                {selectedOrder.is_test_order && (
+                  <span className="px-2 py-0.5 text-[10px] tracking-[0.14em] uppercase font-bold bg-[#fffbeb] text-[#92400e] border border-[#fde68a]">
+                    QA TEST ORDER
+                  </span>
+                )}
+              </div>
+
+              {selectedOrder.is_test_order && (
+                <div className="bg-[#fffbeb] border border-[#fde68a] p-3.5 text-xs text-[#92400e] leading-relaxed">
+                  <strong>Isolated Bulk Shipping QA Test Order:</strong> Synthetic contact &amp; delivery details for dispatch PDF/label testing. Product inventory stock was not deducted and this order is excluded from revenue analytics.
+                </div>
+              )}
 
               {/* Cancellation Audit Card (Shown when Cancelled) */}
               {selectedOrder.order_status === 'cancelled' && (

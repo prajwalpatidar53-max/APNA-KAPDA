@@ -20,6 +20,7 @@ export interface ShippingFiltersState {
   includeDelivered: boolean;
   paymentMethod: 'all' | 'cod' | 'online_pending';
   paymentStatus: 'all' | PaymentStatus;
+  orderScope: 'all' | 'live' | 'test';
   orderIdQuery: string;
   customerQuery: string;
   cityQuery: string;
@@ -41,6 +42,7 @@ export interface ShippingStats {
   readyToShipOrders: number;
   shippedOrders: number;
   incompleteAddressOrders: number;
+  testOrdersCount: number;
 }
 
 export const SENDER_CONFIG_STORAGE_KEY = 'apnakapda_admin_sender_config_v1';
@@ -63,6 +65,7 @@ export const DEFAULT_SHIPPING_FILTERS: ShippingFiltersState = {
   includeDelivered: false,
   paymentMethod: 'all',
   paymentStatus: 'all',
+  orderScope: 'all',
   orderIdQuery: '',
   customerQuery: '',
   cityQuery: '',
@@ -268,6 +271,13 @@ export function filterShippingOrders(
       return false;
     }
 
+    if (filters.orderScope === 'test' && !order.is_test_order) {
+      return false;
+    }
+    if (filters.orderScope === 'live' && order.is_test_order) {
+      return false;
+    }
+
     if (filters.dateFrom || filters.dateTo) {
       const orderDateKey = toLocalDateKey(order.created_at);
       if (!orderDateKey) return false;
@@ -310,8 +320,12 @@ export function computeShippingStats(orders: Order[]): ShippingStats {
   let readyToShipOrders = 0;
   let shippedOrders = 0;
   let incompleteAddressOrders = 0;
+  let testOrdersCount = 0;
 
   for (const order of uniqueOrders) {
+    if (order.is_test_order) {
+      testOrdersCount += 1;
+    }
     if (READY_TO_SHIP_STATUSES.includes(order.order_status)) {
       readyToShipOrders += 1;
     }
@@ -332,6 +346,7 @@ export function computeShippingStats(orders: Order[]): ShippingStats {
     readyToShipOrders,
     shippedOrders,
     incompleteAddressOrders,
+    testOrdersCount,
   };
 }
 

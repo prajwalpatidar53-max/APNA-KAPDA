@@ -1223,5 +1223,137 @@ export async function deleteAdminBanner(
   return {};
 }
 
+// ============================================================================
+// BULK SHIPPING QA TEST ORDERS (ISOLATED & NON-DEDUCTING)
+// ============================================================================
+export interface BulkTestOrderSummary {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  city: string;
+  state: string;
+  pincode: string;
+  order_status: OrderStatus;
+  payment_method: 'cod' | 'online_pending';
+  payment_status: PaymentStatus;
+  total_inr: number;
+  status: 'created' | 'existing';
+}
+
+export interface BulkTestOrdersResult {
+  created_count: number;
+  existing_count: number;
+  total_count: number;
+  orders: BulkTestOrderSummary[];
+  migrationMissing?: boolean;
+  error?: string;
+}
+
+export async function createShippingTestOrdersAdmin(): Promise<BulkTestOrdersResult> {
+  if (!supabase || !isSupabaseConfigured) {
+    return {
+      created_count: 0,
+      existing_count: 0,
+      total_count: 0,
+      orders: [],
+      error: 'Supabase is not configured.',
+    };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return {
+      created_count: 0,
+      existing_count: 0,
+      total_count: 0,
+      orders: [],
+      error:
+        session.status === 'forbidden'
+          ? session.reason || 'Administrator privileges are required.'
+          : 'Administrator authentication required.',
+    };
+  }
+
+  const { data, error } = await supabase.rpc('create_bulk_shipping_test_orders');
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      return {
+        created_count: 0,
+        existing_count: 0,
+        total_count: 0,
+        orders: [],
+        migrationMissing: true,
+        error:
+          'Test order generator RPC is not installed yet. Run supabase/test_orders_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logAdminError(
+      'createShippingTestOrdersAdmin',
+      'rpc/create_bulk_shipping_test_orders',
+      error
+    );
+    return {
+      created_count: 0,
+      existing_count: 0,
+      total_count: 0,
+      orders: [],
+      error: error.message,
+    };
+  }
+
+  const payload = (data ?? {}) as Partial<BulkTestOrdersResult>;
+  return {
+    created_count: Number(payload.created_count ?? 0),
+    existing_count: Number(payload.existing_count ?? 0),
+    total_count: Number(payload.total_count ?? 0),
+    orders: Array.isArray(payload.orders) ? payload.orders : [],
+  };
+}
+
+export async function deleteShippingTestOrdersAdmin(): Promise<{
+  deleted_count: number;
+  migrationMissing?: boolean;
+  error?: string;
+}> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { deleted_count: 0, error: 'Supabase is not configured.' };
+  }
+
+  const session = await verifyAdminSession();
+  if (session.status !== 'authorized') {
+    return {
+      deleted_count: 0,
+      error:
+        session.status === 'forbidden'
+          ? session.reason || 'Administrator privileges are required.'
+          : 'Administrator authentication required.',
+    };
+  }
+
+  const { data, error } = await supabase.rpc('delete_bulk_shipping_test_orders');
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      return {
+        deleted_count: 0,
+        migrationMissing: true,
+        error:
+          'Test order cleanup RPC is not installed yet. Run supabase/test_orders_migration.sql in Supabase SQL Editor.',
+      };
+    }
+    logAdminError(
+      'deleteShippingTestOrdersAdmin',
+      'rpc/delete_bulk_shipping_test_orders',
+      error
+    );
+    return { deleted_count: 0, error: error.message };
+  }
+
+  const payload = (data ?? {}) as { deleted_count?: number };
+  return {
+    deleted_count: Number(payload.deleted_count ?? 0),
+  };
+}
+
+
 
 

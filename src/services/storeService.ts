@@ -596,13 +596,15 @@ export async function fetchCustomerOrders(
     logDbError('fetchCustomerOrders', 'orders', error);
     return { orders: [], error: error.message };
   }
-  const normalizedOrders = ((data as Order[]) ?? []).map((order) => ({
-    ...order,
-    order_items: (order.order_items ?? []).map((item) => ({
-      ...item,
-      product_image: resolveProductImageUrl(item.product_image) || item.product_image,
-    })),
-  }));
+  const normalizedOrders = ((data as Order[]) ?? [])
+    .filter((order) => order.is_test_order !== true)
+    .map((order) => ({
+      ...order,
+      order_items: (order.order_items ?? []).map((item) => ({
+        ...item,
+        product_image: resolveProductImageUrl(item.product_image) || item.product_image,
+      })),
+    }));
   return { orders: normalizedOrders };
 }
 
