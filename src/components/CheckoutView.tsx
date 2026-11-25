@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Lock, ShieldCheck, Tag, Truck, X } from 'lucide-react';
+import { motion } from 'motion/react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Lock,
+  ShieldCheck,
+  Tag,
+  Truck,
+  X,
+} from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   FREE_SHIPPING_THRESHOLD_INR,
@@ -24,6 +33,7 @@ import type {
   UserProfile,
 } from '../types';
 import { ResilientImage } from './ResilientImage';
+import { STORE_EASE } from './StoreMotion';
 
 interface CheckoutViewProps {
   user: SupabaseUser | null;
@@ -52,6 +62,9 @@ function normalizeIndianPhone(raw: string): string | null {
   if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
   return null;
 }
+
+const INPUT_CLASS =
+  'w-full px-4 py-3 rounded-xl border border-[#dfd6c7] bg-[#faf7f2]/60 focus:bg-[#fffdf9] text-xs outline-none focus:border-[#8d5b3c] text-[#1f1d1a] placeholder:text-[#9c9487] transition-colors';
 
 export function CheckoutView({
   user,
@@ -238,58 +251,70 @@ export function CheckoutView({
   if (placedOrder) {
     const confirmedItems = placedOrder.order_items ?? [];
     return (
-      <div className="max-w-3xl mx-auto px-[5%] py-14">
-        <div className="bg-[#fffdf8] border border-[#e5dfd3] p-8 sm:p-10">
-          <div className="flex items-center gap-3 text-[#9a6746]">
-            <CheckCircle2 className="w-6 h-6" />
+      <div className="max-w-3xl mx-auto px-4 sm:px-[5%] py-12 sm:py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.4, ease: STORE_EASE }}
+          className="rounded-[28px] bg-[#fffdf9] border border-[#e8e1d5] p-6 sm:p-10 shadow-[0_20px_50px_-28px_rgba(31,29,26,0.2)]"
+        >
+          <div className="flex items-center gap-3 text-[#2b6345]">
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.35, delay: 0.1, ease: STORE_EASE }}
+              className="w-10 h-10 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] flex items-center justify-center"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+            </motion.div>
             <span className="text-[11px] tracking-[0.22em] uppercase font-bold">
               Order Confirmed
             </span>
           </div>
 
-          <h1 className="font-serif-display text-3xl sm:text-4xl text-[#211f1b] mt-3">
+          <h1 className="font-serif-display text-3xl sm:text-4xl text-[#1f1d1a] mt-4">
             Thank you, {placedOrder.customer_name}.
           </h1>
-          <p className="text-xs sm:text-sm text-[#5f594f] mt-2 leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#5d564c] mt-2 leading-relaxed">
             Your order{' '}
-            <strong className="text-[#211f1b] tabular-nums">
+            <strong className="text-[#1f1d1a] tabular-nums">
               {placedOrder.order_number}
             </strong>{' '}
             has been saved permanently to your APNA KAPDA account.
           </p>
 
-          <div className="mt-6 p-4 sm:p-5 bg-[#f5f2eb] border border-[#e5dfd3] text-xs space-y-2.5">
-            <div className="flex justify-between">
-              <span className="text-[#817b70]">Order Number</span>
-              <span className="font-bold text-[#211f1b] tabular-nums">
+          <div className="mt-6 p-5 rounded-2xl bg-[#f8f4ed] border border-[#eae2d5] text-xs space-y-2.5">
+            <div className="flex justify-between gap-3">
+              <span className="text-[#7c756b]">Order Number</span>
+              <span className="font-bold text-[#1f1d1a] tabular-nums">
                 {placedOrder.order_number}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#817b70]">Order Status</span>
-              <span className="font-semibold text-[#211f1b] uppercase tracking-wider">
+            <div className="flex justify-between gap-3">
+              <span className="text-[#7c756b]">Order Status</span>
+              <span className="font-semibold text-[#1f1d1a] uppercase tracking-wider">
                 {placedOrder.order_status}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#817b70]">Payment Method</span>
-              <span className="font-semibold text-[#211f1b]">
+            <div className="flex justify-between gap-3">
+              <span className="text-[#7c756b]">Payment Method</span>
+              <span className="font-semibold text-[#1f1d1a]">
                 {placedOrder.payment_method === 'cod'
                   ? 'Cash on Delivery (COD)'
                   : 'Online Payment Reservation'}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#817b70]">Payment Status</span>
-              <span className="font-semibold text-[#9a6746] uppercase tracking-wider">
+            <div className="flex justify-between gap-3">
+              <span className="text-[#7c756b]">Payment Status</span>
+              <span className="font-semibold text-[#8d5b3c] uppercase tracking-wider">
                 {placedOrder.payment_status === 'cod_due'
                   ? 'Pay on Delivery'
                   : 'Awaiting Payment'}
               </span>
             </div>
-            <div className="pt-2 border-t border-[#e5dfd3] flex flex-col sm:flex-row sm:justify-between gap-1">
-              <span className="text-[#817b70]">Deliver To</span>
-              <span className="text-[#211f1b] sm:text-right">
+            <div className="pt-2.5 border-t border-[#e5ddd0] flex flex-col sm:flex-row sm:justify-between gap-1">
+              <span className="text-[#7c756b]">Deliver To</span>
+              <span className="text-[#1f1d1a] sm:text-right">
                 {placedOrder.shipping_address.line1}
                 {placedOrder.shipping_address.line2
                   ? `, ${placedOrder.shipping_address.line2}`
@@ -301,36 +326,36 @@ export function CheckoutView({
                 </span>
               </span>
             </div>
-            <div className="flex justify-between text-[#5f594f]">
+            <div className="flex justify-between gap-3 text-[#5d564c]">
               <span>Contact</span>
-              <span className="text-[#211f1b] tabular-nums">
+              <span className="text-[#1f1d1a] tabular-nums text-right">
                 {placedOrder.customer_email} &middot; {placedOrder.customer_phone}
               </span>
             </div>
           </div>
 
           {confirmedItems.length > 0 && (
-            <div className="mt-5 border border-[#e5dfd3] divide-y divide-[#e5dfd3] text-xs">
+            <div className="mt-5 rounded-2xl border border-[#e8e1d5] overflow-hidden divide-y divide-[#ece5d9] text-xs">
               {confirmedItems.map((item, idx) => (
                 <div
                   key={item.id ?? `${item.product_id}-${idx}`}
-                  className="p-3.5 flex items-center justify-between gap-3"
+                  className="p-3.5 flex items-center justify-between gap-3 bg-[#fffdf9]"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-[#211f1b] truncate">
+                    <p className="font-semibold text-[#1f1d1a] truncate">
                       {item.product_name}
                     </p>
-                    <p className="text-[11px] text-[#817b70] tabular-nums mt-0.5">
+                    <p className="text-[11px] text-[#7c756b] tabular-nums mt-0.5">
                       Size {item.selected_size} &times; {item.quantity}
                     </p>
                   </div>
-                  <span className="font-semibold text-[#211f1b] tabular-nums">
+                  <span className="font-semibold text-[#1f1d1a] tabular-nums">
                     {formatINR(item.unit_price_inr * item.quantity)}
                   </span>
                 </div>
               ))}
-              <div className="p-3.5 bg-[#f5f2eb]/40 space-y-1.5 tabular-nums">
-                <div className="flex justify-between text-[#5f594f]">
+              <div className="p-4 bg-[#f8f4ed] space-y-1.5 tabular-nums">
+                <div className="flex justify-between text-[#5d564c]">
                   <span>Subtotal</span>
                   <span>{formatINR(placedOrder.subtotal_inr)}</span>
                 </div>
@@ -346,7 +371,7 @@ export function CheckoutView({
                     <span>&minus;{formatINR(placedOrder.discount_inr ?? 0)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#5f594f]">
+                <div className="flex justify-between text-[#5d564c]">
                   <span>Shipping</span>
                   <span>
                     {placedOrder.shipping_inr === 0
@@ -354,7 +379,7 @@ export function CheckoutView({
                       : formatINR(placedOrder.shipping_inr)}
                   </span>
                 </div>
-                <div className="flex justify-between font-bold text-[#211f1b] pt-1.5 border-t border-[#e5dfd3]">
+                <div className="flex justify-between font-bold text-sm text-[#1f1d1a] pt-2 border-t border-[#e5ddd0]">
                   <span>Total Amount</span>
                   <span>{formatINR(placedOrder.total_inr)}</span>
                 </div>
@@ -374,19 +399,19 @@ export function CheckoutView({
             <button
               type="button"
               onClick={onViewOrders}
-              className="bg-[#24231f] text-white px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#9a6746] transition-colors cursor-pointer"
+              className="rounded-full bg-[#1f1d1a] text-white px-7 py-3.5 text-[11px] font-semibold tracking-[0.16em] uppercase hover:bg-[#8d5b3c] transition-colors cursor-pointer"
             >
               View My Orders
             </button>
             <button
               type="button"
               onClick={onBack}
-              className="border border-[#24231f] text-[#211f1b] px-6 py-3.5 text-[11px] tracking-[0.18em] uppercase hover:bg-[#24231f] hover:text-white transition-colors cursor-pointer"
+              className="rounded-full border border-[#1f1d1a] text-[#1f1d1a] px-7 py-3.5 text-[11px] font-semibold tracking-[0.16em] uppercase hover:bg-[#1f1d1a] hover:text-white transition-colors cursor-pointer"
             >
               Continue Shopping
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -551,30 +576,30 @@ export function CheckoutView({
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-[5%] lg:px-[6%] py-10 lg:py-14">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-[5%] lg:px-[6%] py-8 lg:py-12">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-2 text-xs tracking-[0.14em] uppercase text-[#211f1b] hover:text-[#9a6746] mb-8"
+        className="inline-flex items-center gap-2 rounded-full border border-[#dfd6c7] bg-[#fffdf9] px-4 py-2 text-[11px] font-medium tracking-[0.12em] uppercase text-[#1f1d1a] hover:border-[#1f1d1a] transition-colors mb-7 cursor-pointer"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-3.5 h-3.5" />
         <span>Back to Storefront</span>
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
         {/* Left: Shipping & Payment Method */}
-        <div className="lg:col-span-7 bg-[#fffdf8] border border-[#e5dfd3] p-6 sm:p-8">
-          <p className="text-[10px] tracking-[0.28em] uppercase text-[#9a6746] font-bold">
+        <div className="lg:col-span-7 rounded-[28px] bg-[#fffdf9] border border-[#e8e1d5] p-6 sm:p-8 shadow-[0_14px_40px_-26px_rgba(31,29,26,0.14)]">
+          <p className="text-[10px] tracking-[0.26em] uppercase text-[#8d5b3c] font-bold">
             Secure Checkout
           </p>
-          <h1 className="font-serif-display text-3xl text-[#211f1b] mt-2 mb-6">
+          <h1 className="font-serif-display text-3xl text-[#1f1d1a] mt-2 mb-6">
             Delivery &amp; Order Confirmation
           </h1>
 
           {!user ? (
-            <div className="p-6 bg-[#f5f2eb] border border-[#e5dfd3]">
-              <div className="flex items-center gap-2 text-[#211f1b] font-semibold text-sm">
-                <Lock className="w-4 h-4 text-[#9a6746]" />
+            <div className="p-6 rounded-2xl bg-[#f8f4ed] border border-[#e5ddd0]">
+              <div className="flex items-center gap-2 text-[#1f1d1a] font-semibold text-sm">
+                <Lock className="w-4 h-4 text-[#8d5b3c]" />
                 <span>Sign in required to place an order</span>
               </div>
               <p className="text-xs text-[#69645b] mt-2 leading-relaxed">
@@ -584,7 +609,7 @@ export function CheckoutView({
               <button
                 type="button"
                 onClick={onRequireAuth}
-                className="mt-4 bg-[#24231f] text-white px-5 py-3 text-[11px] tracking-[0.16em] uppercase hover:bg-[#9a6746] transition-colors"
+                className="mt-5 rounded-full bg-[#1f1d1a] text-white px-6 py-3 text-[11px] font-semibold tracking-[0.16em] uppercase hover:bg-[#8d5b3c] transition-colors cursor-pointer"
               >
                 Sign In / Create Account
               </button>
@@ -593,7 +618,7 @@ export function CheckoutView({
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                     Full Name *
                   </label>
                   <input
@@ -602,12 +627,12 @@ export function CheckoutView({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Aarav Sharma"
-                    className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                     Mobile Number (+91) *
                   </label>
                   <input
@@ -616,13 +641,13 @@ export function CheckoutView({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="9876543210"
-                    className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746] tabular-nums"
+                    className={`${INPUT_CLASS} tabular-nums`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                   Email Address *
                 </label>
                 <input
@@ -631,12 +656,12 @@ export function CheckoutView({
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                  className={INPUT_CLASS}
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                   Street Address / House No. *
                 </label>
                 <input
@@ -645,12 +670,12 @@ export function CheckoutView({
                   value={address.line1}
                   onChange={(e) => setAddress({ ...address, line1: e.target.value })}
                   placeholder="42, Johari Bazaar Road"
-                  className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                  className={INPUT_CLASS}
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                   Apartment / Landmark (Optional)
                 </label>
                 <input
@@ -658,13 +683,13 @@ export function CheckoutView({
                   value={address.line2 || ''}
                   onChange={(e) => setAddress({ ...address, line2: e.target.value })}
                   placeholder="Near Hawa Mahal Gate"
-                  className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                  className={INPUT_CLASS}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                     City *
                   </label>
                   <input
@@ -673,11 +698,11 @@ export function CheckoutView({
                     value={address.city}
                     onChange={(e) => setAddress({ ...address, city: e.target.value })}
                     placeholder="Jaipur"
-                    className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                     State *
                   </label>
                   <input
@@ -686,11 +711,11 @@ export function CheckoutView({
                     value={address.state}
                     onChange={(e) => setAddress({ ...address, state: e.target.value })}
                     placeholder="Rajasthan"
-                    className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                  <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                     PIN Code *
                   </label>
                   <input
@@ -700,43 +725,43 @@ export function CheckoutView({
                     value={address.pincode}
                     onChange={(e) => setAddress({ ...address, pincode: e.target.value })}
                     placeholder="302003"
-                    className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746] tabular-nums"
+                    className={`${INPUT_CLASS} tabular-nums`}
                   />
                 </div>
               </div>
 
-              <label className="flex items-center gap-2.5 text-xs text-[#5f594f] cursor-pointer">
+              <label className="flex items-center gap-2.5 text-xs text-[#5d564c] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={saveAddressToProfile}
                   onChange={(e) => setSaveAddressToProfile(e.target.checked)}
-                  className="accent-[#9a6746]"
+                  className="accent-[#8d5b3c] w-4 h-4 rounded"
                 />
                 <span>Save this delivery address to my customer profile</span>
               </label>
 
               {/* Honest Payment Method Options */}
-              <div className="pt-5 border-t border-[#e5dfd3]">
-                <p className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#211f1b] mb-3">
+              <div className="pt-5 border-t border-[#ece5d9]">
+                <p className="text-[11px] uppercase tracking-[0.16em] font-semibold text-[#1f1d1a] mb-3">
                   Order &amp; Payment Method
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('cod')}
-                    className={`p-4 text-left border transition-colors ${
+                    className={`p-4 rounded-2xl text-left border transition-all cursor-pointer ${
                       paymentMethod === 'cod'
-                        ? 'border-[#24231f] bg-[#f5f2eb]'
-                        : 'border-[#e5dfd3] hover:border-[#9a6746]'
+                        ? 'border-[#1f1d1a] bg-[#f8f4ed] shadow-xs'
+                        : 'border-[#e5ddd0] hover:border-[#8d5b3c]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#211f1b]">
+                      <span className="text-xs font-semibold text-[#1f1d1a]">
                         Cash on Delivery (COD)
                       </span>
-                      <Truck className="w-4 h-4 text-[#9a6746]" />
+                      <Truck className="w-4 h-4 text-[#8d5b3c]" />
                     </div>
-                    <p className="text-[11px] text-[#817b70] mt-1.5 leading-relaxed">
+                    <p className="text-[11px] text-[#7c756b] mt-1.5 leading-relaxed">
                       Pay in cash or UPI directly at your doorstep upon delivery.
                     </p>
                   </button>
@@ -744,27 +769,28 @@ export function CheckoutView({
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('online_pending')}
-                    className={`p-4 text-left border transition-colors ${
+                    className={`p-4 rounded-2xl text-left border transition-all cursor-pointer ${
                       paymentMethod === 'online_pending'
-                        ? 'border-[#24231f] bg-[#f5f2eb]'
-                        : 'border-[#e5dfd3] hover:border-[#9a6746]'
+                        ? 'border-[#1f1d1a] bg-[#f8f4ed] shadow-xs'
+                        : 'border-[#e5ddd0] hover:border-[#8d5b3c]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#211f1b]">
+                      <span className="text-xs font-semibold text-[#1f1d1a]">
                         Online Payment (Pending Gateway)
                       </span>
-                      <ShieldCheck className="w-4 h-4 text-[#9a6746]" />
+                      <ShieldCheck className="w-4 h-4 text-[#8d5b3c]" />
                     </div>
-                    <p className="text-[11px] text-[#817b70] mt-1.5 leading-relaxed">
-                      Saves order as awaiting online payment — no charge is simulated without a live gateway.
+                    <p className="text-[11px] text-[#7c756b] mt-1.5 leading-relaxed">
+                      Saves order as awaiting online payment — no charge is simulated
+                      without a live gateway.
                     </p>
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-wider text-[#5f594f] mb-1.5">
+                <label className="block text-[11px] uppercase tracking-wider text-[#5d564c] font-medium mb-1.5">
                   Delivery Note (Optional)
                 </label>
                 <input
@@ -772,44 +798,45 @@ export function CheckoutView({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Call on arrival, leave with reception, etc."
-                  className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
+                  className={INPUT_CLASS}
                 />
               </div>
 
               {errorMsg && (
-                <div className="p-3.5 bg-[#fdf2f0] border border-[#e6c2b8] text-xs text-[#9a3b26]">
+                <div className="p-3.5 rounded-xl bg-[#fdf2f0] border border-[#e6c2b8] text-xs text-[#9a3b26]">
                   {errorMsg}
                 </div>
               )}
 
-              <button
+              <motion.button
                 type="submit"
+                whileTap={{ scale: 0.99 }}
                 disabled={submitting || itemsWithProduct.length === 0}
-                className="w-full bg-[#24231f] text-white py-4 px-6 text-[11px] tracking-[0.2em] uppercase font-medium hover:bg-[#9a6746] transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full rounded-full bg-[#1f1d1a] text-white py-4 px-6 text-[11px] tracking-[0.18em] uppercase font-semibold hover:bg-[#8d5b3c] transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {submitting
                   ? 'Placing Order...'
                   : paymentMethod === 'cod'
                     ? `Place COD Order — ${formatINR(total)}`
                     : `Save Order (Awaiting Online Payment) — ${formatINR(total)}`}
-              </button>
+              </motion.button>
             </form>
           )}
         </div>
 
         {/* Right: Bag Summary */}
-        <div className="lg:col-span-5 bg-[#fffdf8] border border-[#e5dfd3] p-6 sm:p-8 lg:sticky lg:top-28">
-          <h2 className="font-serif-display text-2xl text-[#211f1b] pb-4 border-b border-[#e5dfd3]">
+        <div className="lg:col-span-5 rounded-[28px] bg-[#fffdf9] border border-[#e8e1d5] p-6 sm:p-8 lg:sticky lg:top-24 shadow-[0_14px_40px_-26px_rgba(31,29,26,0.14)]">
+          <h2 className="font-serif-display text-2xl text-[#1f1d1a] pb-4 border-b border-[#ece5d9]">
             Order Summary
           </h2>
 
-          <div className="divide-y divide-[#e5dfd3] max-h-[360px] overflow-y-auto my-2">
+          <div className="divide-y divide-[#ece5d9] max-h-[360px] overflow-y-auto my-2">
             {itemsWithProduct.map(({ product, size, qty }) => (
               <div
                 key={`${product.id}-${size}`}
                 className="py-3.5 flex items-center gap-3.5"
               >
-                <div className="w-14 h-18 bg-[#e9e3d8] overflow-hidden shrink-0">
+                <div className="w-14 h-[72px] rounded-xl bg-[#eae3d6] overflow-hidden shrink-0 border border-[#e8e1d5]">
                   <ResilientImage
                     src={product.image_url}
                     alt={product.name}
@@ -817,14 +844,14 @@ export function CheckoutView({
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#211f1b] truncate">
+                  <p className="text-xs font-semibold text-[#1f1d1a] truncate">
                     {product.name}
                   </p>
-                  <p className="text-[11px] text-[#817b70] mt-0.5 tabular-nums">
+                  <p className="text-[11px] text-[#7c756b] mt-0.5 tabular-nums">
                     Size {size} &times; {qty}
                   </p>
                 </div>
-                <span className="text-xs font-semibold text-[#211f1b] tabular-nums">
+                <span className="text-xs font-bold text-[#1f1d1a] tabular-nums">
                   {formatINR(product.price_inr * qty)}
                 </span>
               </div>
@@ -832,10 +859,10 @@ export function CheckoutView({
           </div>
 
           {/* Coupon Code & Automatic Offer Box */}
-          <div className="border-t border-[#e5dfd3] pt-4 pb-4 space-y-2.5 text-xs">
+          <div className="border-t border-[#ece5d9] pt-4 pb-4 space-y-2.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.16em] uppercase font-bold text-[#5f594f]">
-                <Tag className="w-3.5 h-3.5 text-[#9a6746]" />
+              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.16em] uppercase font-bold text-[#5d564c]">
+                <Tag className="w-3.5 h-3.5 text-[#8d5b3c]" />
                 <span>Promo / Coupon Code</span>
               </span>
               {activeCouponCode && (
@@ -850,7 +877,7 @@ export function CheckoutView({
             </div>
 
             {activeCouponCode ? (
-              <div className="p-2.5 bg-[#ecfdf5] border border-[#a7f3d0] text-[#2b6345] flex items-center justify-between gap-2">
+              <div className="p-3 rounded-xl bg-[#ecfdf5] border border-[#a7f3d0] text-[#2b6345] flex items-center justify-between gap-2">
                 <span className="font-mono font-bold text-[11px]">
                   {activeCouponCode}
                   {discountPreview?.applied_offer_title
@@ -861,7 +888,7 @@ export function CheckoutView({
                   type="button"
                   onClick={handleRemoveCoupon}
                   aria-label="Remove coupon code"
-                  className="text-[#2b6345] hover:text-[#211f1b] cursor-pointer"
+                  className="text-[#2b6345] hover:text-[#1f1d1a] cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -876,13 +903,13 @@ export function CheckoutView({
                     if (couponError) setCouponError('');
                   }}
                   placeholder="Enter code (e.g. WELCOME10)"
-                  className="flex-1 px-3 py-2 border border-[#e5dfd3] bg-[#fffdf8] text-xs font-mono uppercase outline-none focus:border-[#9a6746]"
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-[#dfd6c7] bg-[#faf7f2]/60 text-xs font-mono uppercase outline-none focus:border-[#8d5b3c]"
                 />
                 <button
                   type="button"
                   disabled={couponApplying || itemsWithProduct.length === 0}
                   onClick={handleApplyCoupon}
-                  className="px-4 py-2 border border-[#24231f] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#211f1b] hover:bg-[#24231f] hover:text-white transition-colors cursor-pointer disabled:opacity-45"
+                  className="px-4 py-2.5 rounded-xl border border-[#1f1d1a] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#1f1d1a] hover:bg-[#1f1d1a] hover:text-white transition-colors cursor-pointer disabled:opacity-45"
                 >
                   {couponApplying ? 'Checking...' : 'Apply'}
                 </button>
@@ -899,7 +926,7 @@ export function CheckoutView({
               discountPreview?.valid &&
               discountPreview.discount_inr > 0 &&
               discountPreview.applied_offer_title && (
-                <p className="text-[11px] text-[#2b6345] bg-[#ecfdf5] border border-[#a7f3d0] px-2.5 py-1.5">
+                <p className="text-[11px] text-[#2b6345] bg-[#ecfdf5] border border-[#a7f3d0] rounded-xl px-3 py-2">
                   Automatic offer applied:{' '}
                   <strong>{discountPreview.applied_offer_title}</strong> (&minus;
                   {formatINR(discountPreview.discount_inr)})
@@ -907,14 +934,14 @@ export function CheckoutView({
               )}
 
             {discountInr > 0 && (
-              <p className="text-[10px] text-[#817b70]">
+              <p className="text-[10px] text-[#7c756b]">
                 Single best offer policy: offers &amp; coupon codes cannot be stacked.
               </p>
             )}
           </div>
 
-          <div className="border-t border-[#e5dfd3] pt-4 space-y-2.5 text-xs tabular-nums">
-            <div className="flex justify-between text-[#5f594f]">
+          <div className="border-t border-[#ece5d9] pt-4 space-y-2.5 text-xs tabular-nums">
+            <div className="flex justify-between text-[#5d564c]">
               <span>Subtotal</span>
               <span>{formatINR(subtotal)}</span>
             </div>
@@ -931,13 +958,13 @@ export function CheckoutView({
                 <span>&minus;{formatINR(discountInr)}</span>
               </div>
             )}
-            <div className="flex justify-between text-[#5f594f]">
+            <div className="flex justify-between text-[#5d564c]">
               <span>Shipping</span>
               <span>
                 {shippingFee === 0 ? 'Complimentary' : formatINR(shippingFee)}
               </span>
             </div>
-            <div className="flex justify-between text-base font-bold text-[#211f1b] pt-3 border-t border-[#e5dfd3]">
+            <div className="flex justify-between text-base font-bold text-[#1f1d1a] pt-3 border-t border-[#ece5d9]">
               <span>Total</span>
               <span>{formatINR(total)}</span>
             </div>

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUpRight, X } from 'lucide-react';
 import { isSupabaseConfigured, supabase, SUPABASE_URL } from '../lib/supabase';
 import type { AuthMode } from '../types';
+import { STORE_EASE } from './StoreMotion';
 
 interface AuthModalProps {
   open: boolean;
@@ -10,6 +12,9 @@ interface AuthModalProps {
   onClose: () => void;
   onAuthSuccess: () => void;
 }
+
+const INPUT_CLASS =
+  'w-full px-4 py-3 rounded-xl border border-[#dfd6c7] bg-[#faf7f2]/65 focus:bg-[#fffdf9] text-xs outline-none focus:border-[#8d5b3c] text-[#1f1d1a] placeholder:text-[#9c9487] transition-colors';
 
 export function AuthModal({
   open,
@@ -37,8 +42,6 @@ export function AuthModal({
       setIsError(false);
     }
   }, [notice]);
-
-  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,170 +198,185 @@ export function AuthModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Account authentication"
-    >
-      <div
-        className="relative w-full max-w-[430px] bg-[#fffdf8] border border-[#e5dfd3] p-7 sm:p-9 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4"
           onClick={onClose}
-          aria-label="Close authentication modal"
-          className="absolute right-4 top-4 p-1.5 text-[#817b70] hover:text-[#211f1b]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Account authentication"
         >
-          <X className="w-5 h-5" />
-        </button>
-
-        <p className="text-[10px] tracking-[0.28em] uppercase text-[#9a6746] font-bold">
-          Welcome to APNA KAPDA
-        </p>
-
-        <h2 className="font-serif-display text-3xl text-[#211f1b] mt-2.5 mb-1.5">
-          {mode === 'signup'
-            ? 'Create your account.'
-            : mode === 'recovery'
-              ? 'Reset password.'
-              : 'Welcome back.'}
-        </h2>
-        <p className="text-xs text-[#817b70] mb-6">
-          {mode === 'signup'
-            ? 'Join APNA KAPDA to save your address and track orders.'
-            : mode === 'recovery'
-              ? 'Choose a new password for your APNA KAPDA account.'
-              : 'Sign in with your email and password.'}
-        </p>
-
-        {!isSupabaseConfigured && (
-          <div className="mb-4 p-3 bg-[#f5f2eb] border border-[#e5dfd3] text-[11px] text-[#69645b] leading-relaxed">
-            Supabase environment variables are not connected yet. Add{' '}
-            <code className="font-mono text-[#211f1b]">VITE_SUPABASE_URL</code> and{' '}
-            <code className="font-mono text-[#211f1b]">VITE_SUPABASE_ANON_KEY</code>{' '}
-            to activate live authentication.
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {mode === 'signup' && (
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Your full name"
-              required
-              className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
-            />
-          )}
-
-          {mode !== 'recovery' ? (
-            <>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                required
-                className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password (min. 6 characters)"
-                required
-                className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
-              />
-            </>
-          ) : (
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password (min. 6 characters)"
-              required
-              className="w-full px-3.5 py-3 border border-[#e5dfd3] bg-[#fffdf8] text-xs outline-none focus:border-[#9a6746]"
-            />
-          )}
-
-          {mode === 'login' && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-[11px] text-[#9a6746] hover:text-[#211f1b] underline underline-offset-2"
-              >
-                Forgot password?
-              </button>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-2 bg-[#24231f] text-white py-3.5 px-5 text-[11px] tracking-[0.18em] uppercase font-medium inline-flex items-center justify-center gap-2 hover:bg-[#9a6746] transition-colors disabled:opacity-50"
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.24, ease: STORE_EASE }}
+            className="relative w-full max-w-[430px] rounded-[28px] bg-[#fffdf9] border border-[#e8e1d5] p-7 sm:p-9 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
           >
-            <span>
-              {loading
-                ? 'Please wait...'
-                : mode === 'signup'
-                  ? 'Create Account'
-                  : mode === 'recovery'
-                    ? 'Update Password'
-                    : 'Sign In'}
-            </span>
-            <ArrowUpRight className="w-4 h-4" />
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close authentication modal"
+              className="absolute right-4 top-4 w-8 h-8 rounded-full flex items-center justify-center text-[#7c756b] hover:text-[#1f1d1a] hover:bg-[#f2ece0] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-        {message && (
-          <p
-            className={`text-xs mt-4 leading-relaxed ${
-              isError ? 'text-[#9a3b26]' : 'text-[#9a6746]'
-            }`}
-          >
-            {message}
-          </p>
-        )}
+            <p className="text-[10px] tracking-[0.26em] uppercase text-[#8d5b3c] font-bold">
+              Welcome to APNA KAPDA
+            </p>
 
-        {mode !== 'recovery' && (
-          <p className="text-center text-xs text-[#817b70] mt-6">
-            {mode === 'signup' ? (
-              <>
-                Already a member?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('login');
-                    setMessage('');
-                  }}
-                  className="text-[#9a6746] underline underline-offset-2"
-                >
-                  Sign in
-                </button>
-              </>
-            ) : (
-              <>
-                New here?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signup');
-                    setMessage('');
-                  }}
-                  className="text-[#9a6746] underline underline-offset-2"
-                >
-                  Create an account
-                </button>
-              </>
+            <h2 className="font-serif-display text-3xl text-[#1f1d1a] mt-2 mb-1.5">
+              {mode === 'signup'
+                ? 'Create your account.'
+                : mode === 'recovery'
+                  ? 'Reset password.'
+                  : 'Welcome back.'}
+            </h2>
+            <p className="text-xs text-[#7c756b] mb-6">
+              {mode === 'signup'
+                ? 'Join APNA KAPDA to save your address and track orders.'
+                : mode === 'recovery'
+                  ? 'Choose a new password for your APNA KAPDA account.'
+                  : 'Sign in with your email and password.'}
+            </p>
+
+            {!isSupabaseConfigured && (
+              <div className="mb-4 p-3.5 rounded-xl bg-[#f8f4ed] border border-[#e5ddd0] text-[11px] text-[#69645b] leading-relaxed">
+                Supabase environment variables are not connected yet. Add{' '}
+                <code className="font-mono text-[#1f1d1a]">VITE_SUPABASE_URL</code>{' '}
+                and{' '}
+                <code className="font-mono text-[#1f1d1a]">
+                  VITE_SUPABASE_ANON_KEY
+                </code>{' '}
+                to activate live authentication.
+              </div>
             )}
-          </p>
-        )}
-      </div>
-    </div>
+
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {mode === 'signup' && (
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your full name"
+                  required
+                  className={INPUT_CLASS}
+                />
+              )}
+
+              {mode !== 'recovery' ? (
+                <>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    required
+                    className={INPUT_CLASS}
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password (min. 6 characters)"
+                    required
+                    className={INPUT_CLASS}
+                  />
+                </>
+              ) : (
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min. 6 characters)"
+                  required
+                  className={INPUT_CLASS}
+                />
+              )}
+
+              {mode === 'login' && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-[11px] text-[#8d5b3c] hover:text-[#1f1d1a] underline underline-offset-2 cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 rounded-full bg-[#1f1d1a] text-white py-3.5 px-5 text-[11px] tracking-[0.16em] uppercase font-semibold inline-flex items-center justify-center gap-2 hover:bg-[#8d5b3c] transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <span>
+                  {loading
+                    ? 'Please wait...'
+                    : mode === 'signup'
+                      ? 'Create Account'
+                      : mode === 'recovery'
+                        ? 'Update Password'
+                        : 'Sign In'}
+                </span>
+                <ArrowUpRight className="w-4 h-4" />
+              </button>
+            </form>
+
+            {message && (
+              <p
+                className={`text-xs mt-4 leading-relaxed ${
+                  isError ? 'text-[#9a3b26]' : 'text-[#8d5b3c]'
+                }`}
+              >
+                {message}
+              </p>
+            )}
+
+            {mode !== 'recovery' && (
+              <p className="text-center text-xs text-[#7c756b] mt-6">
+                {mode === 'signup' ? (
+                  <>
+                    Already a member?{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('login');
+                        setMessage('');
+                      }}
+                      className="text-[#8d5b3c] font-semibold underline underline-offset-2 cursor-pointer"
+                    >
+                      Sign in
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    New here?{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('signup');
+                        setMessage('');
+                      }}
+                      className="text-[#8d5b3c] font-semibold underline underline-offset-2 cursor-pointer"
+                    >
+                      Create an account
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

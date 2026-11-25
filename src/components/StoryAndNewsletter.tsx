@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { ArrowUpRight } from 'lucide-react';
 import { BRAND_IMAGES } from '../data/catalog';
 import { subscribeNewsletter } from '../services/storeService';
 import { ResilientImage } from './ResilientImage';
+import { RevealSection } from './StoreMotion';
 
 interface StoryAndNewsletterProps {
   onDiscoverClick: () => void;
@@ -10,9 +12,10 @@ interface StoryAndNewsletterProps {
 
 export function StoryAndNewsletter({ onDiscoverClick }: StoryAndNewsletterProps) {
   const [email, setEmail] = useState('');
-  const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(
-    null
-  );
+  const [statusMessage, setStatusMessage] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -29,54 +32,60 @@ export function StoryAndNewsletter({ onDiscoverClick }: StoryAndNewsletterProps)
 
   return (
     <>
-      <section id="story" className="bg-[#e9e2d6]">
-        <div className="max-w-[1440px] mx-auto px-[5%] lg:px-[6%] py-16 lg:py-24 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div className="h-[340px] sm:h-[440px] lg:h-[490px] overflow-hidden">
-            <ResilientImage
-              src={BRAND_IMAGES.story}
-              alt="APNA KAPDA textile craftsmanship and handloom atelier"
-              className="w-full h-full object-cover"
-            />
-          </div>
+      <section id="story" className="bg-[#f1eadf] border-b border-[#e5dccd]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-[5%] lg:px-[6%] py-16 lg:py-24">
+          <RevealSection className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+            <div className="h-[340px] sm:h-[440px] lg:h-[500px] rounded-[28px] overflow-hidden shadow-[0_20px_50px_-26px_rgba(31,29,26,0.3)] border border-white/60">
+              <ResilientImage
+                src={BRAND_IMAGES.story}
+                alt="APNA KAPDA textile craftsmanship and handloom atelier"
+                className="w-full h-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+              />
+            </div>
 
-          <div>
-            <p className="text-[10px] tracking-[0.34em] uppercase text-[#9a6746] font-bold">
-              Our Philosophy
-            </p>
-            <h2 className="font-serif-display text-3xl sm:text-4xl lg:text-[48px] leading-[1.1] font-medium text-[#211f1b] my-5 text-balance">
-              Not made to fit in. Made to be you.
-            </h2>
-            <p className="text-sm text-[#69645b] leading-[1.95] max-w-[460px]">
-              APNA KAPDA is built around a simple thought — style should feel like
-              you. Inspired by the spirit of India and designed for today&apos;s
-              world, we bring together breathable Indian textiles, everyday comfort,
-              individual expression, and timeless tailoring.
-            </p>
-            <button
-              type="button"
-              onClick={onDiscoverClick}
-              className="mt-8 bg-[#24231f] text-white border border-[#24231f] px-6 py-4 text-[11px] tracking-[0.2em] uppercase inline-flex items-center gap-4 hover:bg-[#9a6746] hover:border-[#9a6746] transition-colors cursor-pointer"
-            >
-              <span>Discover Our World</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </div>
+            <div>
+              <p className="text-[11px] tracking-[0.28em] uppercase text-[#8d5b3c] font-semibold">
+                Our Philosophy
+              </p>
+              <h2 className="font-serif-display text-3xl sm:text-4xl lg:text-[48px] leading-[1.08] font-medium text-[#1f1d1a] my-5 text-balance">
+                Not made to fit in. Made to be you.
+              </h2>
+              <p className="text-sm text-[#5d564c] leading-[1.9] max-w-[470px]">
+                APNA KAPDA is built around a simple thought — style should feel like
+                you. Inspired by the spirit of India and designed for today&apos;s
+                world, we bring together breathable Indian textiles, everyday
+                comfort, individual expression, and timeless tailoring.
+              </p>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.98 }}
+                onClick={onDiscoverClick}
+                className="mt-8 rounded-full bg-[#1f1d1a] text-white px-7 py-4 text-[11px] font-semibold tracking-[0.18em] uppercase inline-flex items-center gap-3 hover:bg-[#8d5b3c] transition-colors cursor-pointer shadow-sm"
+              >
+                <span>Discover Our World</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </RevealSection>
         </div>
       </section>
 
-      <section className="bg-[#24231f] text-white py-16 lg:py-20 px-[5%] lg:px-[6%] text-center">
-        <div className="max-w-xl mx-auto">
-          <p className="text-[10px] tracking-[0.34em] uppercase text-[#e5d6c1] font-bold">
+      <section className="bg-[#1e1b18] text-white py-16 lg:py-20 px-4 sm:px-[5%] lg:px-[6%] text-center">
+        <RevealSection className="max-w-xl mx-auto">
+          <p className="text-[11px] tracking-[0.3em] uppercase text-[#ddb68b] font-semibold">
             Stay in the Loop
           </p>
-          <h2 className="font-serif-display text-3xl sm:text-[38px] font-medium mt-3.5 text-balance">
+          <h2 className="font-serif-display text-3xl sm:text-[40px] font-medium mt-3 text-balance">
             A little style in your inbox.
           </h2>
-          <p className="text-[#bdb5a8] text-xs sm:text-[13px] mt-3 mb-7">
-            Get updates on new drops, collections and exclusive seasonal offers.
+          <p className="text-[#beb5a7] text-xs sm:text-sm mt-3 mb-8">
+            Get updates on new drops, seasonal collections, and member-only offers.
           </p>
 
-          <form onSubmit={handleSubscribe} className="flex max-w-[440px] mx-auto">
+          <form
+            onSubmit={handleSubscribe}
+            className="flex flex-col sm:flex-row gap-2.5 max-w-[460px] mx-auto"
+          >
             <input
               type="email"
               value={email}
@@ -84,27 +93,21 @@ export function StoryAndNewsletter({ onDiscoverClick }: StoryAndNewsletterProps)
               placeholder="Enter your email address"
               required
               aria-label="Email address for newsletter"
-              className="flex-1 min-w-0 px-4 py-3.5 border border-[#625e55] bg-transparent text-white placeholder:text-[#9c968a] text-xs outline-none focus:border-[#e5d6c1]"
+              className="flex-1 min-w-0 px-5 py-3.5 rounded-full border border-white/20 bg-white/[0.05] text-white placeholder:text-[#a39b8e] text-xs outline-none focus:border-[#ddb68b] transition-colors"
             />
             <button
               type="submit"
               disabled={submitting}
-              className="bg-[#e5d6c1] text-[#24231f] px-5 text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-white transition-colors whitespace-nowrap shrink-0 disabled:opacity-60"
+              className="rounded-full bg-[#e6d5bd] text-[#1e1b18] px-6 py-3.5 text-[11px] tracking-[0.14em] uppercase font-semibold hover:bg-white transition-colors whitespace-nowrap shrink-0 disabled:opacity-60 cursor-pointer"
             >
               {submitting ? 'Joining...' : 'Subscribe ↗'}
             </button>
           </form>
 
           {statusMessage && (
-            <p
-              className={`text-xs mt-4 ${
-                statusMessage.isError ? 'text-[#e5d6c1]' : 'text-[#e5d6c1]'
-              }`}
-            >
-              {statusMessage.text}
-            </p>
+            <p className="text-xs mt-4 text-[#e6d5bd]">{statusMessage.text}</p>
           )}
-        </div>
+        </RevealSection>
       </section>
     </>
   );

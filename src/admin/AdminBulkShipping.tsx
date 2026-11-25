@@ -87,6 +87,12 @@ function statusBadgeClass(status: OrderStatus): string {
   return orderStatusBadgeV2(status);
 }
 
+const CARD_CLASS =
+  'rounded-[22px] bg-white/88 backdrop-blur-sm border border-white shadow-[0_8px_28px_-14px_rgba(15,36,48,0.12)]';
+
+const INPUT_CLASS =
+  'w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430] placeholder:text-[#7c94a0] transition-colors';
+
 export function AdminBulkShipping({
   orders,
   loading,
@@ -481,15 +487,17 @@ export function AdminBulkShipping({
   return (
     <div className="space-y-5">
       {/* Top Section Header + Sender Config Toggle */}
-      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div
+        className={`${CARD_CLASS} p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}
+      >
         <div>
-          <p className="text-[11px] tracking-[0.2em] uppercase text-amber-400 font-semibold">
+          <p className="text-[11px] tracking-[0.18em] uppercase text-[#0e7490] font-semibold">
             Dispatch &amp; Packaging Workspace
           </p>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mt-1">
+          <h1 className="text-2xl sm:text-[26px] font-semibold tracking-tight text-[#0f2430] mt-1">
             Shipping Center
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-[#546e7a] mt-1">
             Select verified customer orders, download or print Bulk Order Sheets and internal QR shipping labels, and confirm dispatch status.
           </p>
         </div>
@@ -498,16 +506,16 @@ export function AdminBulkShipping({
           <button
             type="button"
             onClick={() => setQaPanelOpen((v) => !v)}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[11px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-semibold transition-colors cursor-pointer ${
               qaPanelOpen
-                ? 'border-amber-400/50 bg-amber-500/15 text-amber-200'
-                : 'border-white/[0.1] bg-white/[0.03] text-slate-200 hover:bg-white/[0.07] hover:border-white/[0.18]'
+                ? 'border-[#0e7490] bg-cyan-50 text-[#0e7490]'
+                : 'border-slate-200 bg-white text-[#0f2430] hover:bg-slate-50'
             }`}
           >
-            <FlaskConical className="w-3.5 h-3.5 text-amber-400" />
+            <FlaskConical className="w-3.5 h-3.5 text-[#0e7490]" />
             <span>QA Test Orders</span>
             {stats.testOrdersCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 tabular-nums">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 tabular-nums">
                 {stats.testOrdersCount}
               </span>
             )}
@@ -516,19 +524,19 @@ export function AdminBulkShipping({
           <button
             type="button"
             onClick={() => setSenderPanelOpen((v) => !v)}
-            className={`inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-[11px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer shrink-0 ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
               senderValidation.valid
-                ? 'border-white/[0.1] bg-white/[0.03] text-slate-200 hover:bg-white/[0.07] hover:border-white/[0.18]'
-                : 'border-amber-500/40 bg-amber-500/12 text-amber-200 hover:bg-amber-500/18'
+                ? 'border-slate-200 bg-white text-[#0f2430] hover:bg-slate-50'
+                : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
             }`}
           >
-            <Settings2 className="w-3.5 h-3.5 text-amber-400" />
+            <Settings2 className="w-3.5 h-3.5 text-[#0e7490]" />
             <span>Sender Settings</span>
             <span
-              className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                 senderValidation.valid
-                  ? 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25'
-                  : 'bg-rose-500/12 text-rose-300 border-rose-500/25'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
               }`}
             >
               {senderValidation.valid ? 'Ready' : 'Required'}
@@ -545,31 +553,31 @@ export function AdminBulkShipping({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: ADMIN_EASE }}
-            className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-5 sm:p-6 space-y-4"
+            className={`${CARD_CLASS} border-cyan-200/80 p-5 sm:p-6 space-y-4`}
           >
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.07]">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80">
               <div>
-                <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                <p className="text-[11px] tracking-[0.16em] uppercase text-[#0e7490] font-semibold">
                   Bulk Shipping QA Utility
                 </p>
-                <h2 className="text-lg font-semibold text-white mt-1">
+                <h2 className="text-lg font-semibold text-[#0f2430] mt-1">
                   Isolated 20-Order Shipping Test Suite
                 </h2>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                <p className="text-xs text-[#546e7a] mt-1 leading-relaxed">
                   Seeds or clears 20 clearly marked{' '}
-                  <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-amber-300 font-mono text-[11px]">
+                  <code className="px-1.5 py-0.5 rounded bg-cyan-50 text-[#0e7490] border border-cyan-200/70 font-mono text-[11px]">
                     is_test_order = true
                   </code>{' '}
                   orders (
-                  <code className="text-slate-200 font-mono">AK-910001</code>&ndash;
-                  <code className="text-slate-200 font-mono">AK-910020</code>) across 20 Indian cities using existing catalog products and prices. Inventory stock is never deducted, and revenue analytics and customer accounts ignore test orders.
+                  <code className="text-[#0f2430] font-mono font-semibold">AK-910001</code>&ndash;
+                  <code className="text-[#0f2430] font-mono font-semibold">AK-910020</code>) across 20 Indian cities using existing catalog products and prices. Inventory stock is never deducted, and revenue analytics and customer accounts ignore test orders.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setQaPanelOpen(false)}
                 aria-label="Close QA test orders panel"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -580,7 +588,7 @@ export function AdminBulkShipping({
                 type="button"
                 disabled={qaAction !== null}
                 onClick={handleGenerateTestOrders}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
               >
                 {qaAction === 'create' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -599,7 +607,7 @@ export function AdminBulkShipping({
                   type="button"
                   disabled={qaAction !== null}
                   onClick={() => setQaConfirmDelete(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-rose-500/35 bg-rose-500/10 text-rose-300 text-[11px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500/20 transition-colors cursor-pointer disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Remove All Test Orders ({stats.testOrdersCount})</span>
@@ -607,15 +615,15 @@ export function AdminBulkShipping({
               )}
 
               {qaConfirmDelete && (
-                <div className="inline-flex flex-wrap items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3.5 py-2 text-xs">
-                  <span className="text-rose-200 font-semibold">
+                <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl bg-rose-50 border border-rose-200 px-3.5 py-2 text-xs">
+                  <span className="text-rose-800 font-semibold">
                     Delete {stats.testOrdersCount} QA test orders?
                   </span>
                   <button
                     type="button"
                     disabled={qaAction !== null}
                     onClick={handleDeleteTestOrders}
-                    className="px-3 py-1 rounded-lg bg-rose-600 text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500 cursor-pointer disabled:opacity-50"
+                    className="px-3.5 py-1 rounded-full bg-rose-600 text-white text-[11px] font-semibold hover:bg-rose-700 cursor-pointer disabled:opacity-50"
                   >
                     {qaAction === 'delete' ? 'Removing...' : 'Confirm Remove'}
                   </button>
@@ -623,7 +631,7 @@ export function AdminBulkShipping({
                     type="button"
                     disabled={qaAction !== null}
                     onClick={() => setQaConfirmDelete(false)}
-                    className="px-3 py-1 rounded-lg border border-white/[0.12] bg-white/[0.04] text-slate-300 text-[10px] tracking-[0.12em] uppercase font-semibold hover:text-white cursor-pointer"
+                    className="px-3 py-1 rounded-full border border-slate-200 bg-white text-[#546e7a] text-[11px] font-semibold hover:text-[#0f2430] cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -635,8 +643,8 @@ export function AdminBulkShipping({
               <p
                 className={`text-xs p-3.5 rounded-xl border ${
                   qaFeedback.type === 'err'
-                    ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
-                    : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                 }`}
               >
                 {qaFeedback.text}
@@ -644,9 +652,9 @@ export function AdminBulkShipping({
             )}
 
             {qaGeneratedOrders.length > 0 && (
-              <div className="rounded-xl border border-white/[0.08] max-h-64 overflow-y-auto bg-[#080d14]">
+              <div className="rounded-2xl border border-slate-200/80 max-h-64 overflow-y-auto bg-white">
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="sticky top-0 bg-[#0d1520] border-b border-white/[0.07] text-[10px] tracking-[0.14em] uppercase text-slate-400">
+                  <thead className="sticky top-0 bg-[#f6fafb] border-b border-slate-200/80 text-[10px] tracking-[0.12em] uppercase text-[#607b87]">
                     <tr>
                       <th className="py-2.5 px-3 font-semibold">Order #</th>
                       <th className="py-2.5 px-3 font-semibold">Order UUID</th>
@@ -656,24 +664,24 @@ export function AdminBulkShipping({
                       <th className="py-2.5 px-3 font-semibold text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.05]">
+                  <tbody className="divide-y divide-slate-200/70">
                     {qaGeneratedOrders.map((row) => (
-                      <tr key={row.id} className="hover:bg-white/[0.02]">
-                        <td className="py-2 px-3 font-semibold text-white tabular-nums whitespace-nowrap">
+                      <tr key={row.id} className="hover:bg-[#f2f8fa]">
+                        <td className="py-2 px-3 font-semibold text-[#0f2430] tabular-nums whitespace-nowrap">
                           {row.order_number}
                         </td>
-                        <td className="py-2 px-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                        <td className="py-2 px-3 font-mono text-[11px] text-[#607b87] whitespace-nowrap">
                           {row.id}
                         </td>
-                        <td className="py-2 px-3 text-slate-200">{row.customer_name}</td>
-                        <td className="py-2 px-3 text-slate-400 whitespace-nowrap">
+                        <td className="py-2 px-3 text-[#0f2430]">{row.customer_name}</td>
+                        <td className="py-2 px-3 text-[#546e7a] whitespace-nowrap">
                           {row.city}, {row.state} &ndash; {row.pincode}
                         </td>
-                        <td className="py-2 px-3 capitalize text-slate-300 whitespace-nowrap">
+                        <td className="py-2 px-3 capitalize text-[#3c5662] whitespace-nowrap">
                           {row.order_status} &middot;{' '}
                           {row.payment_method === 'cod' ? 'COD' : 'Online'}
                         </td>
-                        <td className="py-2 px-3 text-right font-semibold text-white tabular-nums">
+                        <td className="py-2 px-3 text-right font-semibold text-[#0f2430] tabular-nums">
                           {formatINR(row.total_inr)}
                         </td>
                       </tr>
@@ -694,14 +702,14 @@ export function AdminBulkShipping({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2, ease: ADMIN_EASE }}
-            className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-5 sm:p-6"
+            className={`${CARD_CLASS} border-cyan-200/80 p-5 sm:p-6`}
           >
-            <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.07]">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80">
               <div>
-                <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                <p className="text-[11px] tracking-[0.16em] uppercase text-[#0e7490] font-semibold">
                   Return &amp; Origin Details for Labels
                 </p>
-                <h2 className="text-lg font-semibold text-white mt-1">
+                <h2 className="text-lg font-semibold text-[#0f2430] mt-1">
                   APNA KAPDA Sender Configuration
                 </h2>
               </div>
@@ -709,7 +717,7 @@ export function AdminBulkShipping({
                 type="button"
                 onClick={() => setSenderPanelOpen(false)}
                 aria-label="Close sender settings"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -718,7 +726,7 @@ export function AdminBulkShipping({
             <form onSubmit={handleSaveSenderConfig} className="mt-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     Sender / Brand Name *
                   </label>
                   <input
@@ -728,12 +736,12 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, senderName: e.target.value }))
                     }
                     placeholder="APNA KAPDA"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     Dispatch Phone (10 digits) *
                   </label>
                   <input
@@ -743,12 +751,12 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, phone: e.target.value }))
                     }
                     placeholder="9876543210"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     Origin PIN Code (6 digits) *
                   </label>
                   <input
@@ -762,12 +770,12 @@ export function AdminBulkShipping({
                       }))
                     }
                     placeholder="400001"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500 tabular-nums"
+                    className={`${INPUT_CLASS} tabular-nums`}
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     Warehouse / Studio Address Line 1 *
                   </label>
                   <input
@@ -777,12 +785,12 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, addressLine1: e.target.value }))
                     }
                     placeholder="Unit 4B, Kala Ghoda Textile Hub"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     Address Line 2 (Optional)
                   </label>
                   <input
@@ -792,12 +800,12 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, addressLine2: e.target.value }))
                     }
                     placeholder="Fort, South Mumbai"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     City *
                   </label>
                   <input
@@ -807,12 +815,12 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, city: e.target.value }))
                     }
                     placeholder="Mumbai"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                     State *
                   </label>
                   <input
@@ -822,7 +830,7 @@ export function AdminBulkShipping({
                       setSenderDraft((s) => ({ ...s, state: e.target.value }))
                     }
                     placeholder="Maharashtra"
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </div>
@@ -831,8 +839,8 @@ export function AdminBulkShipping({
                 <p
                   className={`text-xs p-3.5 rounded-xl border ${
                     senderFeedback.type === 'err'
-                      ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
-                      : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                      ? 'bg-rose-50 border-rose-200 text-rose-800'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   }`}
                 >
                   {senderFeedback.text}
@@ -842,7 +850,7 @@ export function AdminBulkShipping({
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Save Sender Details</span>
@@ -855,19 +863,17 @@ export function AdminBulkShipping({
 
       {/* KPI Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="rounded-2xl bg-gradient-to-br from-[#131d2b]/95 to-[#0d141f]/95 border border-white/[0.08] p-5 hover:border-white/[0.15] transition-colors">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] tracking-[0.14em] uppercase font-semibold">
-              Total Orders
-            </span>
-            <span className="w-8 h-8 rounded-xl bg-sky-500/12 border border-sky-500/20 flex items-center justify-center">
-              <Truck className="w-4 h-4 text-sky-400" />
+        <div className={`${CARD_CLASS} p-5 hover:-translate-y-0.5 transition-transform`}>
+          <div className="flex items-center justify-between text-[#546e7a]">
+            <span className="text-xs font-semibold">Total Orders</span>
+            <span className="w-9 h-9 rounded-2xl bg-cyan-50 border border-cyan-200/80 flex items-center justify-center">
+              <Truck className="w-4 h-4 text-[#0e7490]" />
             </span>
           </div>
-          <p className="text-3xl font-semibold text-white mt-3 tabular-nums">
+          <p className="text-3xl font-bold text-[#0f2430] mt-3 tabular-nums">
             {loading ? '—' : <AnimatedCounter value={stats.totalOrders} />}
           </p>
-          <p className="text-[11px] text-slate-400 mt-2">
+          <p className="text-[11px] text-[#607b87] mt-2">
             {stats.testOrdersCount > 0
               ? `Includes ${stats.testOrdersCount} QA test ${
                   stats.testOrdersCount === 1 ? 'order' : 'orders'
@@ -876,64 +882,58 @@ export function AdminBulkShipping({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-[#131d2b]/95 to-[#0d141f]/95 border border-white/[0.08] p-5 hover:border-white/[0.15] transition-colors">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] tracking-[0.14em] uppercase font-semibold">
-              Orders Ready to Ship
-            </span>
-            <span className="w-8 h-8 rounded-xl bg-amber-500/12 border border-amber-500/20 flex items-center justify-center">
-              <Printer className="w-4 h-4 text-amber-400" />
+        <div className={`${CARD_CLASS} p-5 hover:-translate-y-0.5 transition-transform`}>
+          <div className="flex items-center justify-between text-[#546e7a]">
+            <span className="text-xs font-semibold">Orders Ready to Ship</span>
+            <span className="w-9 h-9 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-center">
+              <Printer className="w-4 h-4 text-amber-600" />
             </span>
           </div>
-          <p className="text-3xl font-semibold text-white mt-3 tabular-nums">
+          <p className="text-3xl font-bold text-[#0f2430] mt-3 tabular-nums">
             {loading ? '—' : <AnimatedCounter value={stats.readyToShipOrders} />}
           </p>
-          <p className="text-[11px] text-slate-400 mt-2">
+          <p className="text-[11px] text-[#607b87] mt-2">
             Status: pending, confirmed, or packed
           </p>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-[#131d2b]/95 to-[#0d141f]/95 border border-white/[0.08] p-5 hover:border-white/[0.15] transition-colors">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] tracking-[0.14em] uppercase font-semibold">
-              Orders Already Shipped
-            </span>
-            <span className="w-8 h-8 rounded-xl bg-emerald-500/12 border border-emerald-500/20 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div className={`${CARD_CLASS} p-5 hover:-translate-y-0.5 transition-transform`}>
+          <div className="flex items-center justify-between text-[#546e7a]">
+            <span className="text-xs font-semibold">Orders Already Shipped</span>
+            <span className="w-9 h-9 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </span>
           </div>
-          <p className="text-3xl font-semibold text-white mt-3 tabular-nums">
+          <p className="text-3xl font-bold text-[#0f2430] mt-3 tabular-nums">
             {loading ? '—' : <AnimatedCounter value={stats.shippedOrders} />}
           </p>
-          <p className="text-[11px] text-slate-400 mt-2">
+          <p className="text-[11px] text-[#607b87] mt-2">
             Dispatched &amp; awaiting customer delivery
           </p>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-[#131d2b]/95 to-[#0d141f]/95 border border-white/[0.08] p-5 hover:border-white/[0.15] transition-colors">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] tracking-[0.14em] uppercase font-semibold">
-              Incomplete Delivery Addresses
-            </span>
+        <div className={`${CARD_CLASS} p-5 hover:-translate-y-0.5 transition-transform`}>
+          <div className="flex items-center justify-between text-[#546e7a]">
+            <span className="text-xs font-semibold">Incomplete Addresses</span>
             <span
-              className={`w-8 h-8 rounded-xl border flex items-center justify-center ${
+              className={`w-9 h-9 rounded-2xl border flex items-center justify-center ${
                 stats.incompleteAddressOrders > 0
-                  ? 'bg-rose-500/12 border-rose-500/25'
-                  : 'bg-teal-500/12 border-teal-500/20'
+                  ? 'bg-rose-50 border-rose-200'
+                  : 'bg-teal-50 border-teal-200'
               }`}
             >
               <AlertTriangle
                 className={`w-4 h-4 ${
                   stats.incompleteAddressOrders > 0
-                    ? 'text-rose-400'
-                    : 'text-teal-400'
+                    ? 'text-rose-600'
+                    : 'text-teal-600'
                 }`}
               />
             </span>
           </div>
           <p
-            className={`text-3xl font-semibold mt-3 tabular-nums ${
-              stats.incompleteAddressOrders > 0 ? 'text-rose-400' : 'text-white'
+            className={`text-3xl font-bold mt-3 tabular-nums ${
+              stats.incompleteAddressOrders > 0 ? 'text-rose-600' : 'text-[#0f2430]'
             }`}
           >
             {loading ? (
@@ -942,31 +942,34 @@ export function AdminBulkShipping({
               <AnimatedCounter value={stats.incompleteAddressOrders} />
             )}
           </p>
-          <p className="text-[11px] text-slate-400 mt-2">
+          <p className="text-[11px] text-[#607b87] mt-2">
             Active orders missing phone, address, or 6-digit PIN
           </p>
         </div>
       </div>
 
       {/* Filters Toolbar */}
-      <section className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 space-y-4">
+      <section className={`${CARD_CLASS} p-5 space-y-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase font-semibold text-amber-400">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#0e7490]">
             <Filter className="w-3.5 h-3.5" />
             <span>Filter Orders</span>
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="text-xs text-slate-400 tabular-nums">
-              Showing <strong className="text-white">{filteredOrders.length}</strong> of{' '}
-              {uniqueOrders.length} orders
+            <span className="text-xs text-[#546e7a] tabular-nums">
+              Showing{' '}
+              <strong className="text-[#0f2430] font-semibold">
+                {filteredOrders.length}
+              </strong>{' '}
+              of {uniqueOrders.length} orders
             </span>
             <button
               type="button"
               onClick={() => setFilters(DEFAULT_SHIPPING_FILTERS)}
-              className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.1em] uppercase font-semibold text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#546e7a] hover:text-[#0e7490] transition-colors cursor-pointer"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Filters</span>
             </button>
           </div>
@@ -974,7 +977,7 @@ export function AdminBulkShipping({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Search Order ID
             </label>
             <input
@@ -984,12 +987,12 @@ export function AdminBulkShipping({
                 setFilters((f) => ({ ...f, orderIdQuery: e.target.value }))
               }
               placeholder="e.g. AK-104218"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+              className={INPUT_CLASS}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Customer Name or Phone
             </label>
             <input
@@ -999,12 +1002,12 @@ export function AdminBulkShipping({
                 setFilters((f) => ({ ...f, customerQuery: e.target.value }))
               }
               placeholder="Name or 10-digit phone..."
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+              className={INPUT_CLASS}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               City
             </label>
             <input
@@ -1014,12 +1017,12 @@ export function AdminBulkShipping({
                 setFilters((f) => ({ ...f, cityQuery: e.target.value }))
               }
               placeholder="e.g. Mumbai, Delhi"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500"
+              className={INPUT_CLASS}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               PIN Code
             </label>
             <input
@@ -1030,12 +1033,12 @@ export function AdminBulkShipping({
                 setFilters((f) => ({ ...f, pincodeQuery: e.target.value }))
               }
               placeholder="e.g. 400001"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500 tabular-nums"
+              className={`${INPUT_CLASS} tabular-nums`}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               From Date
             </label>
             <input
@@ -1044,12 +1047,12 @@ export function AdminBulkShipping({
               onChange={(e) =>
                 setFilters((f) => ({ ...f, dateFrom: e.target.value }))
               }
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 [color-scheme:dark]"
+              className={INPUT_CLASS}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               To Date
             </label>
             <input
@@ -1058,12 +1061,12 @@ export function AdminBulkShipping({
               onChange={(e) =>
                 setFilters((f) => ({ ...f, dateTo: e.target.value }))
               }
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 [color-scheme:dark]"
+              className={INPUT_CLASS}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Order Status
             </label>
             <select
@@ -1075,7 +1078,7 @@ export function AdminBulkShipping({
                 }))
               }
               aria-label="Filter shipping orders by status"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 capitalize"
+              className={`${INPUT_CLASS} capitalize`}
             >
               <option value="default_dispatch">
                 Active Dispatch (Excludes Cancelled &amp; Delivered)
@@ -1090,7 +1093,7 @@ export function AdminBulkShipping({
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Payment Method
             </label>
             <select
@@ -1102,7 +1105,7 @@ export function AdminBulkShipping({
                 }))
               }
               aria-label="Filter shipping orders by payment method"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100"
+              className={INPUT_CLASS}
             >
               <option value="all">All Payment Methods</option>
               <option value="cod">Cash on Delivery (COD)</option>
@@ -1111,7 +1114,7 @@ export function AdminBulkShipping({
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Payment Status
             </label>
             <select
@@ -1123,7 +1126,7 @@ export function AdminBulkShipping({
                 }))
               }
               aria-label="Filter shipping orders by payment status"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100"
+              className={INPUT_CLASS}
             >
               <option value="all">All Payment Statuses</option>
               {ALL_PAYMENT_STATUSES.map((p) => (
@@ -1135,7 +1138,7 @@ export function AdminBulkShipping({
           </div>
 
           <div>
-            <label className="block text-[10px] tracking-[0.12em] uppercase text-slate-400 mb-1.5">
+            <label className="block text-[11px] font-medium text-[#546e7a] mb-1.5">
               Order Scope
             </label>
             <select
@@ -1147,7 +1150,7 @@ export function AdminBulkShipping({
                 }))
               }
               aria-label="Filter shipping orders by scope"
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100"
+              className={INPUT_CLASS}
             >
               <option value="all">All Orders (Live &amp; QA Test)</option>
               <option value="live">Live Customer Orders</option>
@@ -1157,7 +1160,7 @@ export function AdminBulkShipping({
         </div>
 
         {filters.orderStatus === 'default_dispatch' && (
-          <div className="flex flex-wrap items-center gap-5 pt-3 border-t border-white/[0.07] text-xs text-slate-300">
+          <div className="flex flex-wrap items-center gap-5 pt-3 border-t border-slate-200/80 text-xs text-[#3c5662]">
             <label className="inline-flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -1165,7 +1168,7 @@ export function AdminBulkShipping({
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, includeDelivered: e.target.checked }))
                 }
-                className="accent-amber-500 w-3.5 h-3.5 rounded"
+                className="accent-[#0e7490] w-3.5 h-3.5 rounded"
               />
               <span>Include Delivered Orders</span>
             </label>
@@ -1176,7 +1179,7 @@ export function AdminBulkShipping({
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, includeCancelled: e.target.checked }))
                 }
-                className="accent-amber-500 w-3.5 h-3.5 rounded"
+                className="accent-[#0e7490] w-3.5 h-3.5 rounded"
               />
               <span>Include Cancelled Orders</span>
             </label>
@@ -1185,9 +1188,11 @@ export function AdminBulkShipping({
       </section>
 
       {/* Selection & Print/Dispatch Action Bar */}
-      <section className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+      <section
+        className={`${CARD_CLASS} p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4`}
+      >
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-[11px] tracking-[0.1em] uppercase font-bold tabular-nums">
+          <span className="px-3.5 py-2 rounded-full bg-cyan-50 border border-cyan-200 text-[#0e7490] text-xs font-bold tabular-nums">
             Selected: {selectedOrders.length}
           </span>
 
@@ -1195,7 +1200,7 @@ export function AdminBulkShipping({
             type="button"
             disabled={filteredOrders.length === 0}
             onClick={handleSelectAllFiltered}
-            className="px-3.5 py-2 rounded-xl border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] text-[11px] tracking-[0.1em] uppercase font-semibold text-slate-200 transition-colors cursor-pointer disabled:opacity-40"
+            className="px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-[#0f2430] transition-colors cursor-pointer disabled:opacity-40"
           >
             Select All Filtered ({filteredOrders.length})
           </button>
@@ -1204,21 +1209,21 @@ export function AdminBulkShipping({
             type="button"
             disabled={selectedOrders.length === 0}
             onClick={handleDeselectAll}
-            className="px-3.5 py-2 rounded-xl border border-white/[0.08] bg-transparent hover:bg-white/[0.05] text-[11px] tracking-[0.1em] uppercase font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
+            className="px-3.5 py-2 rounded-full border border-slate-200/80 bg-transparent hover:bg-slate-100 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] transition-colors cursor-pointer disabled:opacity-40"
           >
             Deselect All
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center rounded-xl border border-white/[0.09] bg-[#080d14] p-0.5">
+          <div className="flex items-center rounded-full border border-slate-200 bg-[#f4f8fa] p-0.5">
             <button
               type="button"
               onClick={() => setLabelLayout('a4')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
                 labelLayout === 'a4'
-                  ? 'bg-white/[0.12] text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white text-[#0f2430] shadow-sm'
+                  : 'text-[#607b87] hover:text-[#0f2430]'
               }`}
             >
               A4 Sheet
@@ -1226,24 +1231,24 @@ export function AdminBulkShipping({
             <button
               type="button"
               onClick={() => setLabelLayout('4x6')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
                 labelLayout === '4x6'
-                  ? 'bg-white/[0.12] text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white text-[#0f2430] shadow-sm'
+                  : 'text-[#607b87] hover:text-[#0f2430]'
               }`}
             >
               4 &times; 6 in
             </button>
           </div>
 
-          <div className="flex items-center rounded-xl border border-white/[0.09] bg-[#080d14] p-0.5">
+          <div className="flex items-center rounded-full border border-slate-200 bg-[#f4f8fa] p-0.5">
             <button
               type="button"
               onClick={() => setPdfDeliveryMode('download')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
                 pdfDeliveryMode === 'download'
-                  ? 'bg-white/[0.12] text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white text-[#0f2430] shadow-sm'
+                  : 'text-[#607b87] hover:text-[#0f2430]'
               }`}
             >
               Download PDF
@@ -1251,10 +1256,10 @@ export function AdminBulkShipping({
             <button
               type="button"
               onClick={() => setPdfDeliveryMode('print')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
                 pdfDeliveryMode === 'print'
-                  ? 'bg-white/[0.12] text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white text-[#0f2430] shadow-sm'
+                  : 'text-[#607b87] hover:text-[#0f2430]'
               }`}
             >
               Print PDF
@@ -1265,12 +1270,12 @@ export function AdminBulkShipping({
             type="button"
             disabled={selectedOrders.length === 0 || generatingType !== null}
             onClick={() => handleRequestPdf('sheet')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-white text-[11px] tracking-[0.1em] uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-[#0f2430] text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
           >
             {generatingType === 'sheet' ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0e7490]" />
             ) : (
-              <FileDown className="w-3.5 h-3.5 text-amber-400" />
+              <FileDown className="w-3.5 h-3.5 text-[#0e7490]" />
             )}
             <span>Download Bulk Order PDF</span>
           </button>
@@ -1279,7 +1284,7 @@ export function AdminBulkShipping({
             type="button"
             disabled={selectedOrders.length === 0 || generatingType !== null}
             onClick={() => handleRequestPdf('labels')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.1em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-40"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
           >
             {generatingType === 'labels' ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1293,7 +1298,7 @@ export function AdminBulkShipping({
             type="button"
             disabled={selectedOrders.length === 0 || markingShipped}
             onClick={() => setShipConfirmOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-teal-500/40 bg-teal-500/12 text-teal-200 hover:bg-teal-500/22 text-[11px] tracking-[0.1em] uppercase font-semibold transition-colors cursor-pointer disabled:opacity-40"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
           >
             <Truck className="w-3.5 h-3.5" />
             <span>Mark Selected as Shipped</span>
@@ -1304,17 +1309,17 @@ export function AdminBulkShipping({
       {actionNotice && (
         <div
           role="status"
-          className={`p-4 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
+          className={`p-4 rounded-2xl border text-xs flex flex-wrap items-center justify-between gap-3 ${
             actionNotice.type === 'err'
-              ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
               : actionNotice.type === 'warn'
-                ? 'bg-amber-500/10 border-amber-500/25 text-amber-200'
-                : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
           <div className="flex items-start gap-2.5">
             {actionNotice.type === 'ok' ? (
-              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
             ) : (
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             )}
@@ -1328,7 +1333,7 @@ export function AdminBulkShipping({
                 onClick={() =>
                   triggerPdfDownload(lastGeneratedPdf.blob, lastGeneratedPdf.filename)
                 }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/35 text-emerald-200 text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-emerald-200 text-emerald-800 text-[11px] font-semibold hover:bg-emerald-100/60 transition-colors cursor-pointer"
               >
                 <FileDown className="w-3 h-3" />
                 <span>Download</span>
@@ -1336,7 +1341,7 @@ export function AdminBulkShipping({
               <button
                 type="button"
                 onClick={() => triggerPdfPrint(lastGeneratedPdf.blob)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 text-[10px] tracking-[0.12em] uppercase font-bold hover:bg-emerald-400 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
               >
                 <Printer className="w-3 h-3" />
                 <span>Print</span>
@@ -1347,15 +1352,15 @@ export function AdminBulkShipping({
       )}
 
       {/* Filtered Orders Selection Table & Mobile Cards */}
-      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
+      <div className={`${CARD_CLASS} overflow-hidden`}>
         {loading ? (
           <AdminTableSkeleton rows={6} />
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-lg font-semibold text-white">
+            <p className="text-base font-semibold text-[#0f2430]">
               No matching orders to display
             </p>
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-[#546e7a] mt-1.5">
               {uniqueOrders.length === 0
                 ? 'Customer orders placed through checkout will appear here automatically.'
                 : 'Try adjusting your date range, status toggles, or location filters.'}
@@ -1367,27 +1372,27 @@ export function AdminBulkShipping({
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[10px] tracking-[0.14em] uppercase text-slate-400">
+                  <tr className="border-b border-slate-200/80 bg-[#f6fafb] text-[11px] font-semibold text-[#607b87]">
                     <th className="py-3.5 px-4 w-10">
                       <input
                         type="checkbox"
                         checked={allFilteredSelected}
                         onChange={handleToggleHeaderCheckbox}
                         aria-label="Select all filtered orders"
-                        className="accent-amber-500 w-3.5 h-3.5 cursor-pointer"
+                        className="accent-[#0e7490] w-3.5 h-3.5 cursor-pointer"
                       />
                     </th>
-                    <th className="py-3.5 px-3 font-semibold">Order # &amp; Date</th>
-                    <th className="py-3.5 px-3 font-semibold">Customer &amp; Phone</th>
-                    <th className="py-3.5 px-3 font-semibold">City &amp; PIN</th>
-                    <th className="py-3.5 px-3 font-semibold">Delivery Address</th>
-                    <th className="py-3.5 px-3 font-semibold">Items</th>
-                    <th className="py-3.5 px-3 font-semibold">Payment</th>
-                    <th className="py-3.5 px-3 font-semibold">Status</th>
-                    <th className="py-3.5 px-4 font-semibold text-right">Total</th>
+                    <th className="py-3.5 px-3">Order # &amp; Date</th>
+                    <th className="py-3.5 px-3">Customer &amp; Phone</th>
+                    <th className="py-3.5 px-3">City &amp; PIN</th>
+                    <th className="py-3.5 px-3">Delivery Address</th>
+                    <th className="py-3.5 px-3">Items</th>
+                    <th className="py-3.5 px-3">Payment</th>
+                    <th className="py-3.5 px-3">Status</th>
+                    <th className="py-3.5 px-4 text-right">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.05] text-xs">
+                <tbody className="divide-y divide-slate-200/70 text-xs">
                   {filteredOrders.map((order) => {
                     const checked = selectedIds.has(order.id);
                     const addrValidation = validateOrderForShipping(order);
@@ -1405,7 +1410,7 @@ export function AdminBulkShipping({
                       <tr
                         key={order.id}
                         className={`transition-colors ${
-                          checked ? 'bg-amber-500/[0.08]' : 'hover:bg-white/[0.025]'
+                          checked ? 'bg-cyan-50/70' : 'hover:bg-[#f2f8fa]'
                         }`}
                       >
                         <td className="py-3.5 px-4 align-top">
@@ -1414,28 +1419,28 @@ export function AdminBulkShipping({
                             checked={checked}
                             onChange={() => toggleOrderSelection(order.id)}
                             aria-label={`Select order ${order.order_number}`}
-                            className="accent-amber-500 w-3.5 h-3.5 mt-0.5 cursor-pointer"
+                            className="accent-[#0e7490] w-3.5 h-3.5 mt-0.5 cursor-pointer"
                           />
                         </td>
 
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            <p className="font-semibold text-white tabular-nums">
+                            <p className="font-semibold text-[#0f2430] tabular-nums">
                               {order.order_number}
                             </p>
                             {order.is_test_order && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] tracking-[0.12em] uppercase font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                 TEST
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                          <p className="text-[11px] text-[#607b87] mt-0.5 tabular-nums">
                             {formatOrderTimestamp(order.created_at)}
                           </p>
                           <button
                             type="button"
                             onClick={() => onInspectOrder(order)}
-                            className="mt-1 inline-flex items-center gap-1 text-[10px] tracking-[0.1em] uppercase font-semibold text-amber-400 hover:text-amber-300 cursor-pointer"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#0e7490] hover:text-[#0f2430] cursor-pointer"
                           >
                             <span>Inspect</span>
                             <ExternalLink className="w-2.5 h-2.5" />
@@ -1443,32 +1448,32 @@ export function AdminBulkShipping({
                         </td>
 
                         <td className="py-3.5 px-3 align-top">
-                          <p className="font-medium text-slate-100">
+                          <p className="font-semibold text-[#0f2430]">
                             {order.customer_name || '—'}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                          <p className="text-[11px] text-[#607b87] mt-0.5 tabular-nums">
                             {order.customer_phone || 'No phone'}
                           </p>
                         </td>
 
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
-                          <p className="font-medium text-slate-100">
+                          <p className="font-medium text-[#0f2430]">
                             {order.shipping_address?.city || '—'}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                          <p className="text-[11px] text-[#607b87] mt-0.5 tabular-nums">
                             PIN: {order.shipping_address?.pincode || '—'}
                           </p>
                         </td>
 
                         <td className="py-3.5 px-3 align-top max-w-[230px]">
-                          <p className="text-[11px] text-slate-200 leading-snug">
+                          <p className="text-[11px] text-[#334e5a] leading-snug">
                             {streetLines.join(', ') || 'Missing street address'}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
+                          <p className="text-[11px] text-[#607b87] mt-0.5">
                             {cityStatePin || 'Missing city / PIN'}
                           </p>
                           {!addrValidation.valid && (
-                            <div className="mt-1.5 inline-flex items-start gap-1 rounded-lg text-[10px] text-rose-300 bg-rose-500/12 border border-rose-500/25 px-2 py-0.5">
+                            <div className="mt-1.5 inline-flex items-start gap-1 rounded-lg text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5">
                               <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                               <span>{addrValidation.issues.join(', ')}</span>
                             </div>
@@ -1476,10 +1481,10 @@ export function AdminBulkShipping({
                         </td>
 
                         <td className="py-3.5 px-3 align-top max-w-[210px]">
-                          <p className="font-medium text-slate-100 tabular-nums">
+                          <p className="font-semibold text-[#0f2430] tabular-nums">
                             {totalQty} {totalQty === 1 ? 'unit' : 'units'}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
+                          <p className="text-[11px] text-[#607b87] mt-0.5 line-clamp-2">
                             {items
                               .map(
                                 (i) => `${i.product_name} (${i.selected_size}×${i.quantity})`
@@ -1490,22 +1495,22 @@ export function AdminBulkShipping({
 
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-md text-[10px] tracking-[0.1em] uppercase font-bold border ${
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] tracking-[0.06em] uppercase font-bold border ${
                               paymentInfo.mode === 'COD'
-                                ? 'bg-orange-500/12 text-orange-300 border-orange-500/25'
-                                : 'bg-emerald-500/12 text-emerald-300 border-emerald-500/25'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             }`}
                           >
                             {paymentInfo.mode}
                           </span>
-                          <p className="text-[10px] text-slate-500 mt-1 uppercase">
+                          <p className="text-[10px] text-[#708a96] mt-1 uppercase">
                             {order.payment_status.replace('_', ' ')}
                           </p>
                         </td>
 
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
                           <span
-                            className={`inline-block px-2.5 py-1 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border ${statusBadgeClass(
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${statusBadgeClass(
                               order.order_status
                             )}`}
                           >
@@ -1513,7 +1518,7 @@ export function AdminBulkShipping({
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4 align-top text-right font-semibold text-white tabular-nums whitespace-nowrap">
+                        <td className="py-3.5 px-4 align-top text-right font-semibold text-[#0f2430] tabular-nums whitespace-nowrap">
                           {formatINR(order.total_inr)}
                         </td>
                       </tr>
@@ -1524,7 +1529,7 @@ export function AdminBulkShipping({
             </div>
 
             {/* Mobile Responsive Order Cards */}
-            <div className="md:hidden divide-y divide-white/[0.06]">
+            <div className="md:hidden divide-y divide-slate-200/70">
               {filteredOrders.map((order) => {
                 const checked = selectedIds.has(order.id);
                 const addrValidation = validateOrderForShipping(order);
@@ -1542,7 +1547,7 @@ export function AdminBulkShipping({
                   <div
                     key={order.id}
                     className={`p-4 space-y-2.5 transition-colors ${
-                      checked ? 'bg-amber-500/[0.08]' : ''
+                      checked ? 'bg-cyan-50/70' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1551,27 +1556,27 @@ export function AdminBulkShipping({
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleOrderSelection(order.id)}
-                          className="accent-amber-500 w-4 h-4 mt-0.5"
+                          className="accent-[#0e7490] w-4 h-4 mt-0.5"
                         />
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-bold text-white tabular-nums">
+                            <p className="text-xs font-bold text-[#0f2430] tabular-nums">
                               {order.order_number}
                             </p>
                             {order.is_test_order && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] tracking-[0.12em] uppercase font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                 TEST
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-[#607b87]">
                             {formatOrderTimestamp(order.created_at)}
                           </p>
                         </div>
                       </label>
 
                       <span
-                        className={`px-2 py-0.5 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border ${statusBadgeClass(
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${statusBadgeClass(
                           order.order_status
                         )}`}
                       >
@@ -1580,35 +1585,35 @@ export function AdminBulkShipping({
                     </div>
 
                     <div className="pl-6 space-y-1.5 text-xs">
-                      <p className="font-medium text-slate-100">
+                      <p className="font-semibold text-[#0f2430]">
                         {order.customer_name} &middot;{' '}
-                        <span className="tabular-nums text-slate-400">
+                        <span className="tabular-nums font-normal text-[#607b87]">
                           {order.customer_phone}
                         </span>
                       </p>
 
-                      <p className="text-[11px] text-slate-400">
-                        <MapPin className="w-3 h-3 inline mr-1 text-amber-400" />
+                      <p className="text-[11px] text-[#546e7a]">
+                        <MapPin className="w-3 h-3 inline mr-1 text-[#0e7490]" />
                         {[...streetLines, cityStatePin].filter(Boolean).join(', ') ||
                           'Address incomplete'}
                       </p>
 
                       {!addrValidation.valid && (
-                        <p className="text-[11px] rounded-lg text-rose-300 bg-rose-500/12 border border-rose-500/25 px-2.5 py-1">
+                        <p className="text-[11px] rounded-xl text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1">
                           Incomplete: {addrValidation.issues.join(', ')}
                         </p>
                       )}
 
                       <div className="flex items-center justify-between pt-1">
-                        <span className="text-[11px] text-slate-400 tabular-nums">
+                        <span className="text-[11px] text-[#607b87] tabular-nums">
                           {totalQty} {totalQty === 1 ? 'item' : 'items'} &middot;{' '}
-                          <strong className="text-slate-200">{paymentInfo.mode}</strong> &middot;{' '}
-                          <strong className="text-white">{formatINR(order.total_inr)}</strong>
+                          <strong className="text-[#334e5a]">{paymentInfo.mode}</strong> &middot;{' '}
+                          <strong className="text-[#0f2430]">{formatINR(order.total_inr)}</strong>
                         </span>
                         <button
                           type="button"
                           onClick={() => onInspectOrder(order)}
-                          className="text-[10px] tracking-[0.12em] uppercase font-semibold text-amber-400 hover:text-amber-300 cursor-pointer"
+                          className="text-xs font-semibold text-[#0e7490] hover:text-[#0f2430] cursor-pointer"
                         >
                           Inspect
                         </button>
@@ -1630,7 +1635,7 @@ export function AdminBulkShipping({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-[#071c27]/60 backdrop-blur-[3px] flex items-center justify-center p-4"
             onClick={() => setValidationModal(null)}
             role="dialog"
             aria-modal="true"
@@ -1641,15 +1646,15 @@ export function AdminBulkShipping({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.22, ease: ADMIN_EASE }}
-              className="w-full max-w-xl rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 shadow-2xl max-h-[88vh] flex flex-col"
+              className="w-full max-w-xl rounded-[26px] bg-white text-[#0f2430] border border-white p-6 shadow-2xl max-h-[88vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.07]">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80">
                 <div>
-                  <p className="text-[11px] tracking-[0.18em] uppercase text-rose-400 font-semibold">
+                  <p className="text-[11px] tracking-[0.14em] uppercase text-rose-600 font-semibold">
                     Pre-Print Address Validation
                   </p>
-                  <h3 className="text-xl font-semibold text-white mt-1">
+                  <h3 className="text-xl font-semibold text-[#0f2430] mt-1">
                     {validationModal.invalidEntries.length}{' '}
                     {validationModal.invalidEntries.length === 1
                       ? 'Order Has'
@@ -1661,13 +1666,13 @@ export function AdminBulkShipping({
                   type="button"
                   onClick={() => setValidationModal(null)}
                   aria-label="Close validation modal"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] cursor-pointer"
+                  className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+              <p className="text-xs text-[#546e7a] mt-3 leading-relaxed">
                 The orders below are missing required recipient or delivery details (name, 10-digit phone, street address, city, state, or 6-digit PIN code). Review them before printing or exclude them from this batch.
               </p>
 
@@ -1675,16 +1680,16 @@ export function AdminBulkShipping({
                 {validationModal.invalidEntries.map(({ order, issues }) => (
                   <div
                     key={order.id}
-                    className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                   >
                     <div>
-                      <p className="text-xs font-bold text-white tabular-nums">
+                      <p className="text-xs font-bold text-[#0f2430] tabular-nums">
                         {order.order_number} &middot;{' '}
-                        <span className="font-medium text-slate-200">
+                        <span className="font-medium text-[#3c5662]">
                           {order.customer_name || 'Unnamed customer'}
                         </span>
                       </p>
-                      <p className="text-[11px] text-rose-300 mt-1">
+                      <p className="text-[11px] text-rose-700 mt-1">
                         {issues.join(' · ')}
                       </p>
                     </div>
@@ -1694,7 +1699,7 @@ export function AdminBulkShipping({
                         setValidationModal(null);
                         onInspectOrder(order);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.12] hover:bg-white/[0.12] text-[10px] tracking-[0.12em] uppercase font-semibold text-white shrink-0 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-rose-200 hover:bg-rose-100 text-[11px] font-semibold text-[#0f2430] shrink-0 cursor-pointer"
                     >
                       <span>Open Order Details</span>
                       <ExternalLink className="w-3 h-3" />
@@ -1703,11 +1708,11 @@ export function AdminBulkShipping({
                 ))}
               </div>
 
-              <div className="mt-5 pt-4 border-t border-white/[0.07] flex flex-col-reverse sm:flex-row justify-end gap-2.5">
+              <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-col-reverse sm:flex-row justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setValidationModal(null)}
-                  className="px-5 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                  className="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1715,7 +1720,7 @@ export function AdminBulkShipping({
                   type="button"
                   disabled={validationModal.validOrders.length === 0}
                   onClick={handleConfirmExcludeAndExport}
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-40"
+                  className="px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
                 >
                   {validationModal.validOrders.length === 0
                     ? 'No Valid Orders Remaining'
@@ -1735,7 +1740,7 @@ export function AdminBulkShipping({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-[#071c27]/60 backdrop-blur-[3px] flex items-center justify-center p-4"
             onClick={() => !markingShipped && setShipConfirmOpen(false)}
             role="dialog"
             aria-modal="true"
@@ -1746,15 +1751,15 @@ export function AdminBulkShipping({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.22, ease: ADMIN_EASE }}
-              className="w-full max-w-lg rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 shadow-2xl"
+              className="w-full max-w-lg rounded-[26px] bg-white text-[#0f2430] border border-white p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.07]">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80">
                 <div>
-                  <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                  <p className="text-[11px] tracking-[0.14em] uppercase text-[#0e7490] font-semibold">
                     Confirm Dispatch Status Update
                   </p>
-                  <h3 className="text-xl font-semibold text-white mt-1">
+                  <h3 className="text-xl font-semibold text-[#0f2430] mt-1">
                     Mark {shipBreakdown.eligible.length} of {selectedOrders.length}{' '}
                     Selected as Shipped?
                   </h3>
@@ -1764,35 +1769,35 @@ export function AdminBulkShipping({
                   disabled={markingShipped}
                   onClick={() => setShipConfirmOpen(false)}
                   aria-label="Close modal"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] cursor-pointer"
+                  className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="mt-4 space-y-3 text-xs text-slate-300">
+              <div className="mt-4 space-y-3 text-xs text-[#546e7a]">
                 <p className="leading-relaxed">
                   This will permanently update eligible orders (
-                  <strong className="text-white">pending</strong>,{' '}
-                  <strong className="text-white">confirmed</strong>, or{' '}
-                  <strong className="text-white">packed</strong>) to{' '}
-                  <strong className="text-teal-300">Shipped</strong> in Supabase.
+                  <strong className="text-[#0f2430]">pending</strong>,{' '}
+                  <strong className="text-[#0f2430]">confirmed</strong>, or{' '}
+                  <strong className="text-[#0f2430]">packed</strong>) to{' '}
+                  <strong className="text-[#0e7490]">Shipped</strong> in Supabase.
                 </p>
 
-                <div className="p-4 rounded-xl bg-[#080d14] border border-white/[0.08] space-y-1.5 tabular-nums">
-                  <p className="text-white font-semibold">
+                <div className="p-4 rounded-2xl bg-[#f4f8fa] border border-slate-200/80 space-y-1.5 tabular-nums">
+                  <p className="text-[#0f2430] font-semibold">
                     Selected Orders: {selectedOrders.length}
                   </p>
                   <p>
                     Eligible to mark Shipped:{' '}
-                    <strong className="text-emerald-400">
+                    <strong className="text-emerald-700">
                       {shipBreakdown.eligible.length}
                     </strong>
                   </p>
                   {shipBreakdown.alreadyShipped.length > 0 && (
                     <p>
                       Already Shipped (unchanged):{' '}
-                      <strong className="text-slate-200">
+                      <strong className="text-[#0f2430]">
                         {shipBreakdown.alreadyShipped.length}
                       </strong>
                     </p>
@@ -1800,13 +1805,13 @@ export function AdminBulkShipping({
                   {shipBreakdown.delivered.length > 0 && (
                     <p>
                       Delivered (protected):{' '}
-                      <strong className="text-slate-200">
+                      <strong className="text-[#0f2430]">
                         {shipBreakdown.delivered.length}
                       </strong>
                     </p>
                   )}
                   {shipBreakdown.cancelled.length > 0 && (
-                    <p className="text-rose-300">
+                    <p className="text-rose-700">
                       Cancelled (strictly protected — will NOT be marked shipped):{' '}
                       <strong>{shipBreakdown.cancelled.length}</strong>
                     </p>
@@ -1814,12 +1819,12 @@ export function AdminBulkShipping({
                 </div>
               </div>
 
-              <div className="mt-5 pt-4 border-t border-white/[0.07] flex flex-col-reverse sm:flex-row justify-end gap-2.5">
+              <div className="mt-5 pt-4 border-t border-slate-200/80 flex flex-col-reverse sm:flex-row justify-end gap-2.5">
                 <button
                   type="button"
                   disabled={markingShipped}
                   onClick={() => setShipConfirmOpen(false)}
-                  className="px-5 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1827,7 +1832,7 @@ export function AdminBulkShipping({
                   type="button"
                   disabled={markingShipped || shipBreakdown.eligible.length === 0}
                   onClick={handleConfirmMarkShipped}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40"
                 >
                   <Truck className="w-3.5 h-3.5" />
                   <span>

@@ -43,6 +43,12 @@ type OffersSubTab = 'offers' | 'banner';
 
 const CATEGORIES: ProductCategory[] = ['Men', 'Women', 'Unisex'];
 
+const CARD_CLASS =
+  'rounded-[22px] bg-white/88 backdrop-blur-sm border border-white shadow-[0_8px_28px_-14px_rgba(15,36,48,0.12)]';
+
+const INPUT_CLASS =
+  'w-full px-3.5 py-2.5 rounded-xl border border-slate-200/90 bg-[#f4f8fa] text-[#0f2430] placeholder:text-[#7c94a0] outline-none focus:border-[#0e7490] focus:bg-white transition-colors';
+
 function toLocalDateTimeInput(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -85,24 +91,24 @@ function getScheduleBadge(
   if (!isActive) {
     return {
       label: 'Paused',
-      className: 'border-slate-500/25 bg-slate-500/15 text-slate-300',
+      className: 'border-slate-200 bg-slate-100 text-[#607b87]',
     };
   }
   if (endMs !== null && now > endMs) {
     return {
       label: 'Expired',
-      className: 'border-rose-500/25 bg-rose-500/12 text-rose-300',
+      className: 'border-rose-200 bg-rose-50 text-rose-700',
     };
   }
   if (startMs !== null && now < startMs) {
     return {
       label: 'Scheduled',
-      className: 'border-amber-500/30 bg-amber-500/14 text-amber-300',
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
     };
   }
   return {
     label: 'Live',
-    className: 'border-emerald-500/25 bg-emerald-500/12 text-emerald-300',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   };
 }
 
@@ -451,15 +457,17 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
   return (
     <div className="space-y-5">
       {/* Header & Sub-Navigation */}
-      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div
+        className={`${CARD_CLASS} p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4`}
+      >
         <div>
-          <p className="text-[11px] tracking-[0.2em] uppercase text-amber-400 font-semibold">
+          <p className="text-[11px] tracking-[0.18em] uppercase text-[#0e7490] font-semibold">
             Promotions &amp; Merchandising
           </p>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mt-1">
+          <h1 className="text-2xl sm:text-[26px] font-semibold tracking-tight text-[#0f2430] mt-1">
             Offers, Coupons &amp; Storefront Banner
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-[#546e7a] mt-1">
             Server-validated automatic offers &amp; coupon codes (no stacking: customer receives one active offer per order).
           </p>
         </div>
@@ -468,10 +476,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           <button
             type="button"
             onClick={() => setSubTab('offers')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-[0.12em] uppercase font-semibold border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
               subTab === 'offers'
-                ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
-                : 'bg-white/[0.03] text-slate-300 border-white/[0.1] hover:bg-white/[0.07] hover:text-white'
+                ? 'bg-[#0f2430] text-white border-[#0f2430]'
+                : 'bg-white text-[#546e7a] border-slate-200 hover:bg-slate-50 hover:text-[#0f2430]'
             }`}
           >
             <Tag className="w-3.5 h-3.5" />
@@ -481,10 +489,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           <button
             type="button"
             onClick={() => setSubTab('banner')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-[0.12em] uppercase font-semibold border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
               subTab === 'banner'
-                ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
-                : 'bg-white/[0.03] text-slate-300 border-white/[0.1] hover:bg-white/[0.07] hover:text-white'
+                ? 'bg-[#0f2430] text-white border-[#0f2430]'
+                : 'bg-white text-[#546e7a] border-slate-200 hover:bg-slate-50 hover:text-[#0f2430]'
             }`}
           >
             <Megaphone className="w-3.5 h-3.5" />
@@ -494,31 +502,31 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       </div>
 
       {migrationMissing && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
           <div className="space-y-1">
-            <p className="font-semibold text-amber-100">
+            <p className="font-semibold text-amber-950">
               Offers &amp; Banner SQL Migration Required
             </p>
-            <p className="text-amber-200/90 leading-relaxed">
+            <p className="text-amber-900/90 leading-relaxed">
               Run{' '}
-              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              <code className="bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[11px]">
                 supabase/offers_migration.sql
               </code>{' '}
               in Supabase SQL Editor to create{' '}
-              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              <code className="bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[11px]">
                 public.offers
               </code>
               ,{' '}
-              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              <code className="bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[11px]">
                 public.offer_redemptions
               </code>
               ,{' '}
-              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              <code className="bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[11px]">
                 public.storefront_banners
               </code>
               , and{' '}
-              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+              <code className="bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded font-mono text-[11px]">
                 preview_checkout_discount
               </code>
               .
@@ -528,8 +536,8 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       )}
 
       {loadError && !migrationMissing && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200 flex items-center gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
           <span>{loadError}</span>
         </div>
       )}
@@ -537,16 +545,16 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {notice && (
         <div
           role="status"
-          className={`p-3.5 rounded-xl border text-xs flex items-center gap-2.5 ${
+          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
             notice.type === 'err'
-              ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
-              : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
           {notice.type === 'err' ? (
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
           ) : (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
           )}
           <span>{notice.text}</span>
         </div>
@@ -558,9 +566,9 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {subTab === 'offers' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#546e7a]">
               Active policy:{' '}
-              <strong className="text-slate-100">
+              <strong className="text-[#0f2430]">
                 Single Best Offer (No Stacking)
               </strong>{' '}
               — coupon codes take priority when entered; otherwise the highest eligible automatic offer applies.
@@ -569,7 +577,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               type="button"
               disabled={migrationMissing}
               onClick={openCreateOffer}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-45"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-45 shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create Offer / Coupon</span>
@@ -584,14 +592,14 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.2, ease: ADMIN_EASE }}
                 onSubmit={handleSaveOffer}
-                className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-6 space-y-5"
+                className={`${CARD_CLASS} border-cyan-200/80 p-6 space-y-5`}
               >
-                <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                   <div>
-                    <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                    <p className="text-[11px] tracking-[0.16em] uppercase text-[#0e7490] font-semibold">
                       {editingOfferId ? 'Edit Offer' : 'New Offer / Coupon'}
                     </p>
-                    <h2 className="text-xl font-semibold text-white mt-0.5">
+                    <h2 className="text-xl font-semibold text-[#0f2430] mt-0.5">
                       {editingOfferId ? offerTitle || 'Edit Offer' : 'Configure Discount Rule'}
                     </h2>
                   </div>
@@ -602,7 +610,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       resetOfferForm();
                     }}
                     aria-label="Close offer form"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                    className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -610,7 +618,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Offer Title *
                     </label>
                     <input
@@ -619,12 +627,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={offerTitle}
                       onChange={(e) => setOfferTitle(e.target.value)}
                       placeholder="e.g. Festive Welcome 15% Off"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Short Description
                     </label>
                     <input
@@ -632,12 +640,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={offerDescription}
                       onChange={(e) => setOfferDescription(e.target.value)}
                       placeholder="e.g. Valid on orders above ₹1,499"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Discount Mode *
                     </label>
                     <select
@@ -645,7 +653,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       onChange={(e) =>
                         setDiscountMode(e.target.value as OfferDiscountMode)
                       }
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     >
                       <option value="coupon">Coupon Code (Entered at Checkout)</option>
                       <option value="automatic">Automatic Offer (Auto-Applied)</option>
@@ -654,7 +662,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
 
                   {discountMode === 'coupon' ? (
                     <div>
-                      <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                         Coupon Code *
                       </label>
                       <input
@@ -668,17 +676,17 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                         }
                         placeholder="WELCOME10"
                         maxLength={32}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-amber-300 placeholder:text-slate-500 outline-none focus:border-amber-400/60 font-mono uppercase"
+                        className={`${INPUT_CLASS} text-[#0e7490] font-mono font-bold uppercase`}
                       />
                     </div>
                   ) : (
-                    <div className="flex items-end pb-2.5 text-[11px] text-slate-400">
+                    <div className="flex items-end pb-2.5 text-[11px] text-[#607b87]">
                       No coupon code required — automatically evaluates eligible carts.
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Discount Type *
                     </label>
                     <select
@@ -686,7 +694,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       onChange={(e) =>
                         setDiscountType(e.target.value as OfferDiscountType)
                       }
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     >
                       <option value="percentage">Percentage Discount (%)</option>
                       <option value="fixed">Fixed Amount Discount (₹ INR)</option>
@@ -694,7 +702,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Discount Value ({discountType === 'percentage' ? '%' : '₹'}) *
                     </label>
                     <input
@@ -704,12 +712,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       max={discountType === 'percentage' ? 100 : undefined}
                       value={discountValue}
                       onChange={(e) => setDiscountValue(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Minimum Cart Value (₹)
                     </label>
                     <input
@@ -717,12 +725,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       min={0}
                       value={minCartValue}
                       onChange={(e) => setMinCartValue(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Max Discount Cap (₹, Optional)
                     </label>
                     <input
@@ -731,12 +739,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={maxDiscount}
                       onChange={(e) => setMaxDiscount(e.target.value)}
                       placeholder="Unlimited"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Total Usage Limit (Optional)
                     </label>
                     <input
@@ -745,12 +753,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={totalUsageLimit}
                       onChange={(e) => setTotalUsageLimit(e.target.value)}
                       placeholder="Unlimited"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Per-Customer Usage Limit (Optional)
                     </label>
                     <input
@@ -759,39 +767,39 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={perCustomerLimit}
                       onChange={(e) => setPerCustomerLimit(e.target.value)}
                       placeholder="Unlimited"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Start Date &amp; Time (Optional)
                     </label>
                     <input
                       type="datetime-local"
                       value={startsAt}
                       onChange={(e) => setStartsAt(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Expiry Date &amp; Time (Optional)
                     </label>
                     <input
                       type="datetime-local"
                       value={expiresAt}
                       onChange={(e) => setExpiresAt(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
                 </div>
 
                 {/* Target Scope */}
-                <div className="pt-4 border-t border-white/[0.07] space-y-3 text-xs">
+                <div className="pt-4 border-t border-slate-200/80 space-y-3 text-xs">
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-2">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-2">
                       Applies To *
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -806,10 +814,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           key={opt.id}
                           type="button"
                           onClick={() => setAppliesTo(opt.id)}
-                          className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border transition-colors cursor-pointer ${
+                          className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
                             appliesTo === opt.id
-                              ? 'bg-amber-500/15 text-amber-200 border-amber-400/50'
-                              : 'bg-[#080d14] text-slate-400 border-white/[0.09] hover:text-white hover:border-white/[0.18]'
+                              ? 'bg-[#0f2430] text-white border-[#0f2430]'
+                              : 'bg-[#f4f8fa] text-[#546e7a] border-slate-200 hover:text-[#0f2430] hover:border-[#0e7490]'
                           }`}
                         >
                           {opt.label}
@@ -819,8 +827,8 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   </div>
 
                   {appliesTo === 'categories' && (
-                    <div className="p-4 rounded-xl bg-[#080d14] border border-white/[0.08]">
-                      <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-2.5">
+                    <div className="p-4 rounded-2xl bg-[#f4f8fa] border border-slate-200/80">
+                      <p className="text-[11px] font-semibold text-[#546e7a] mb-2.5">
                         Select Categories ({selectedCategories.length} selected)
                       </p>
                       <div className="flex flex-wrap gap-4">
@@ -845,9 +853,9 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                     );
                                   }
                                 }}
-                                className="accent-amber-500"
+                                className="accent-[#0e7490]"
                               />
-                              <span className="font-medium text-slate-100">{cat}</span>
+                              <span className="font-semibold text-[#0f2430]">{cat}</span>
                             </label>
                           );
                         })}
@@ -856,26 +864,26 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   )}
 
                   {appliesTo === 'products' && (
-                    <div className="p-4 rounded-xl bg-[#080d14] border border-white/[0.08] space-y-2.5">
+                    <div className="p-4 rounded-2xl bg-[#f4f8fa] border border-slate-200/80 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400">
+                        <p className="text-[11px] font-semibold text-[#546e7a]">
                           Select Target Products ({selectedProductIds.length} selected)
                         </p>
                         <div className="relative w-56">
-                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <Search className="w-3.5 h-3.5 text-[#7c94a0] absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="text"
                             value={productPickerQuery}
                             onChange={(e) => setProductPickerQuery(e.target.value)}
                             placeholder="Filter products..."
-                            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-[11px] bg-[#0e1622] border border-white/[0.09] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                            className="w-full pl-8 pr-3 py-1.5 rounded-xl text-[11px] bg-white border border-slate-200 text-[#0f2430] placeholder:text-[#7c94a0] outline-none focus:border-[#0e7490]"
                           />
                         </div>
                       </div>
 
-                      <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.06] rounded-xl bg-[#0e1622]/70 border border-white/[0.07]">
+                      <div className="max-h-48 overflow-y-auto divide-y divide-slate-200/70 rounded-xl bg-white border border-slate-200/80">
                         {filteredProductsForPicker.length === 0 ? (
-                          <p className="p-3 text-[11px] text-slate-400">
+                          <p className="p-3 text-[11px] text-[#607b87]">
                             No products match your filter.
                           </p>
                         ) : (
@@ -884,7 +892,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                             return (
                               <label
                                 key={prod.id}
-                                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-white/[0.03] cursor-pointer"
+                                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-[#f2f8fa] cursor-pointer"
                               >
                                 <span className="inline-flex items-center gap-2.5 min-w-0">
                                   <input
@@ -901,13 +909,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                         );
                                       }
                                     }}
-                                    className="accent-amber-500"
+                                    className="accent-[#0e7490]"
                                   />
-                                  <span className="truncate font-medium text-slate-100">
+                                  <span className="truncate font-medium text-[#0f2430]">
                                     {prod.name}
                                   </span>
                                 </span>
-                                <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
+                                <span className="text-[11px] text-[#607b87] shrink-0 tabular-nums">
                                   {prod.category} · {formatINR(prod.price_inr)}
                                 </span>
                               </label>
@@ -923,35 +931,35 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       type="checkbox"
                       checked={offerIsActive}
                       onChange={(e) => setOfferIsActive(e.target.checked)}
-                      className="accent-amber-500"
+                      className="accent-[#0e7490]"
                     />
-                    <span className="font-medium text-slate-200">
+                    <span className="font-medium text-[#0f2430]">
                       Offer is Active (evaluates immediately within schedule)
                     </span>
                   </label>
                 </div>
 
                 {offerFormError && (
-                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200">
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
                     {offerFormError}
                   </div>
                 )}
 
-                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-white/[0.07]">
+                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-slate-200/80">
                   <button
                     type="button"
                     onClick={() => {
                       setOfferFormOpen(false);
                       resetOfferForm();
                     }}
-                    className="px-4 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                    className="px-4 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={savingOffer}
-                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {savingOffer
                       ? 'Saving...'
@@ -965,15 +973,15 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           </AnimatePresence>
 
           {/* Offers List */}
-          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
+          <div className={`${CARD_CLASS} overflow-hidden`}>
             {loading ? (
               <AdminTableSkeleton rows={5} />
             ) : offers.length === 0 ? (
               <div className="p-12 text-center">
-                <p className="text-lg font-semibold text-white">
+                <p className="text-base font-semibold text-[#0f2430]">
                   No offers or coupons created yet
                 </p>
-                <p className="text-xs text-slate-400 mt-1.5">
+                <p className="text-xs text-[#546e7a] mt-1.5">
                   Create an automatic storewide promotion or a coupon code for checkout.
                 </p>
               </div>
@@ -981,17 +989,17 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[10px] tracking-[0.14em] uppercase text-slate-400">
-                      <th className="py-3.5 px-4 font-semibold">Offer</th>
-                      <th className="py-3.5 px-3 font-semibold">Mode / Code</th>
-                      <th className="py-3.5 px-3 font-semibold">Discount</th>
-                      <th className="py-3.5 px-3 font-semibold">Target &amp; Schedule</th>
-                      <th className="py-3.5 px-3 font-semibold">Usage</th>
-                      <th className="py-3.5 px-3 font-semibold">Status</th>
-                      <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
+                    <tr className="border-b border-slate-200/80 bg-[#f6fafb] text-[11px] font-semibold text-[#607b87]">
+                      <th className="py-3.5 px-5">Offer</th>
+                      <th className="py-3.5 px-3">Mode / Code</th>
+                      <th className="py-3.5 px-3">Discount</th>
+                      <th className="py-3.5 px-3">Target &amp; Schedule</th>
+                      <th className="py-3.5 px-3">Usage</th>
+                      <th className="py-3.5 px-3">Status</th>
+                      <th className="py-3.5 px-5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.05] text-xs">
+                  <tbody className="divide-y divide-slate-200/70 text-xs">
                     {offers.map((offer) => {
                       const badge = getScheduleBadge(
                         offer.is_active,
@@ -999,48 +1007,48 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                         offer.expires_at
                       );
                       return (
-                        <tr key={offer.id} className="hover:bg-white/[0.025] transition-colors">
-                          <td className="py-3.5 px-4">
-                            <p className="font-semibold text-white">{offer.title}</p>
+                        <tr key={offer.id} className="hover:bg-[#f2f8fa] transition-colors">
+                          <td className="py-3.5 px-5">
+                            <p className="font-semibold text-[#0f2430]">{offer.title}</p>
                             {offer.description && (
-                              <p className="text-[11px] text-slate-400 mt-0.5">
+                              <p className="text-[11px] text-[#607b87] mt-0.5">
                                 {offer.description}
                               </p>
                             )}
                           </td>
                           <td className="py-3.5 px-3 whitespace-nowrap">
                             {offer.discount_mode === 'coupon' ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/12 border border-amber-500/30 font-mono text-[11px] font-bold text-amber-300">
+                              <span className="px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-200 font-mono text-[11px] font-bold text-[#0e7490]">
                                 {offer.coupon_code}
                               </span>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-lg bg-sky-500/12 border border-sky-500/25 text-[10px] uppercase tracking-wider font-semibold text-sky-300">
+                              <span className="px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-[10px] uppercase tracking-wider font-semibold text-sky-700">
                                 Automatic
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-3 tabular-nums">
-                            <p className="font-semibold text-white">
+                            <p className="font-semibold text-[#0f2430]">
                               {offer.discount_type === 'percentage'
                                 ? `${offer.discount_value}% OFF`
                                 : `Flat ${formatINR(offer.discount_value)} OFF`}
                             </p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-[#607b87]">
                               Min: {formatINR(offer.min_cart_value_inr)}
                               {offer.max_discount_inr !== null
                                 ? ` · Cap: ${formatINR(offer.max_discount_inr)}`
                                 : ''}
                             </p>
                           </td>
-                          <td className="py-3.5 px-3 text-[11px] text-slate-300">
-                            <p className="font-medium text-slate-100">
+                          <td className="py-3.5 px-3 text-[11px] text-[#546e7a]">
+                            <p className="font-semibold text-[#0f2430]">
                               {offer.applies_to === 'all'
                                 ? 'All Products'
                                 : offer.applies_to === 'categories'
                                   ? `Categories: ${offer.categories.join(', ')}`
                                   : `${offer.product_ids.length} Specific Product(s)`}
                             </p>
-                            <p className="text-slate-400 tabular-nums mt-0.5">
+                            <p className="text-[#607b87] tabular-nums mt-0.5">
                               {offer.starts_at || offer.expires_at
                                 ? `${formatScheduleDate(offer.starts_at)} → ${
                                     offer.expires_at
@@ -1050,13 +1058,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                 : 'No expiry schedule'}
                             </p>
                           </td>
-                          <td className="py-3.5 px-3 tabular-nums whitespace-nowrap text-slate-300">
-                            <p className="font-medium text-white">
+                          <td className="py-3.5 px-3 tabular-nums whitespace-nowrap text-[#546e7a]">
+                            <p className="font-semibold text-[#0f2430]">
                               {offer.usage_count} /{' '}
                               {offer.total_usage_limit ?? '∞'}
                             </p>
                             {offer.per_customer_usage_limit !== null && (
-                              <p className="text-[10px] text-slate-400">
+                              <p className="text-[10px] text-[#708a96]">
                                 Max {offer.per_customer_usage_limit}/customer
                               </p>
                             )}
@@ -1066,18 +1074,18 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                               type="button"
                               onClick={() => handleToggleOfferActive(offer)}
                               title="Toggle Active / Paused"
-                              className={`px-2.5 py-1 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border cursor-pointer transition-opacity hover:opacity-85 ${badge.className}`}
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer transition-opacity hover:opacity-85 ${badge.className}`}
                             >
                               {badge.label}
                             </button>
                           </td>
-                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <td className="py-3.5 px-5 text-right whitespace-nowrap">
                             <div className="inline-flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => openEditOffer(offer)}
                                 aria-label={`Edit ${offer.title}`}
-                                className="p-1.5 rounded-lg border border-white/[0.1] text-slate-300 hover:text-white hover:bg-white/[0.07] cursor-pointer transition-colors"
+                                className="p-2 rounded-xl border border-slate-200 bg-white text-[#4a6470] hover:text-[#0e7490] hover:border-[#0e7490]/40 hover:bg-cyan-50/50 cursor-pointer transition-colors"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -1085,7 +1093,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                 type="button"
                                 onClick={() => setConfirmDeleteOffer(offer)}
                                 aria-label={`Delete ${offer.title}`}
-                                className="p-1.5 rounded-lg border border-white/[0.1] text-slate-400 hover:text-rose-300 hover:border-rose-500/35 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                className="p-2 rounded-xl border border-slate-200 bg-white text-[#607b87] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 cursor-pointer transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1108,13 +1116,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {subTab === 'banner' && (
         <div className="space-y-5">
           {/* Live Storefront Bar Preview */}
-          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 space-y-3">
+          <div className={`${CARD_CLASS} p-5 space-y-3`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                <p className="text-[11px] tracking-[0.16em] uppercase text-[#0e7490] font-semibold">
                   Live Announcement Bar Preview
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-[#546e7a] mt-0.5">
                   {bannerFormOpen
                     ? 'Previewing your current draft below before publishing.'
                     : liveBannerInDb
@@ -1127,7 +1135,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={migrationMissing}
                   onClick={openCreateBanner}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-45"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-45 shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Create Promotional Banner</span>
@@ -1136,8 +1144,8 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
             </div>
 
             {/* Authentic Storefront Top Bar Preview */}
-            <div className="rounded-xl border border-white/[0.1] overflow-hidden">
-              <div className="bg-[#24231f] text-[#eee6d8] h-9 px-4 flex items-center justify-center relative text-[10px] tracking-[0.18em] uppercase">
+            <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="bg-[#1e1b18] text-[#eee6d8] h-9 px-4 flex items-center justify-center relative text-[10px] tracking-[0.18em] uppercase">
                 <span className="truncate flex items-center gap-2">
                   {previewBannerTitle && (
                     <strong className="text-[#d6b38d] font-bold">
@@ -1163,14 +1171,14 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.2, ease: ADMIN_EASE }}
                 onSubmit={handleSaveBanner}
-                className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-6 space-y-4 text-xs"
+                className={`${CARD_CLASS} border-cyan-200/80 p-6 space-y-4 text-xs`}
               >
-                <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                   <div>
-                    <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                    <p className="text-[11px] tracking-[0.16em] uppercase text-[#0e7490] font-semibold">
                       {editingBannerId ? 'Edit Banner' : 'New Storefront Banner'}
                     </p>
-                    <h2 className="text-xl font-semibold text-white mt-0.5">
+                    <h2 className="text-xl font-semibold text-[#0f2430] mt-0.5">
                       Configure Top Announcement Bar
                     </h2>
                   </div>
@@ -1181,7 +1189,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       resetBannerForm();
                     }}
                     aria-label="Close banner form"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                    className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1189,7 +1197,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Offer Prefix / Tag (Optional)
                     </label>
                     <input
@@ -1197,12 +1205,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={bannerOfferTitle}
                       onChange={(e) => setBannerOfferTitle(e.target.value)}
                       placeholder="e.g. FESTIVE EDIT"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       CTA Link Text (Optional)
                     </label>
                     <input
@@ -1210,12 +1218,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={bannerCtaText}
                       onChange={(e) => setBannerCtaText(e.target.value)}
                       placeholder="Shop Now"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     />
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Banner Message Text *
                     </label>
                     <input
@@ -1224,12 +1232,12 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       value={bannerText}
                       onChange={(e) => setBannerText(e.target.value)}
                       placeholder="e.g. Flat 15% Off Above ₹1,999 · Use Code WELCOME15"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Click Destination
                     </label>
                     <select
@@ -1245,7 +1253,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                               : ''
                         );
                       }}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                      className={INPUT_CLASS}
                     >
                       <option value="shop">Storefront Catalog (#shop)</option>
                       <option value="category">Specific Category Collection</option>
@@ -1257,13 +1265,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   <div>
                     {bannerDestType === 'category' && (
                       <>
-                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                        <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                           Target Category
                         </label>
                         <select
                           value={bannerDestValue || 'Men'}
                           onChange={(e) => setBannerDestValue(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                          className={INPUT_CLASS}
                         >
                           {CATEGORIES.map((cat) => (
                             <option key={cat} value={cat}>
@@ -1275,13 +1283,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                     )}
                     {bannerDestType === 'product' && (
                       <>
-                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                        <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                           Target Product
                         </label>
                         <select
                           value={bannerDestValue}
                           onChange={(e) => setBannerDestValue(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                          className={INPUT_CLASS}
                         >
                           <option value="">Select a product...</option>
                           {products.map((p) => (
@@ -1294,7 +1302,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                     )}
                     {bannerDestType === 'url' && (
                       <>
-                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                        <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                           Section ID or Path (e.g. #collections or #story)
                         </label>
                         <input
@@ -1302,38 +1310,38 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           value={bannerDestValue}
                           onChange={(e) => setBannerDestValue(e.target.value)}
                           placeholder="#collections"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                          className={INPUT_CLASS}
                         />
                       </>
                     )}
                     {bannerDestType === 'shop' && (
-                      <div className="pt-6 text-[11px] text-slate-400">
+                      <div className="pt-6 text-[11px] text-[#607b87]">
                         Clicking the CTA scrolls cleanly to the Shop catalog grid.
                       </div>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Start Date &amp; Time (Optional)
                     </label>
                     <input
                       type="datetime-local"
                       value={bannerStartsAt}
                       onChange={(e) => setBannerStartsAt(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                    <label className="block text-[11px] font-semibold text-[#546e7a] mb-1.5">
                       Expiry Date &amp; Time (Optional)
                     </label>
                     <input
                       type="datetime-local"
                       value={bannerExpiresAt}
                       onChange={(e) => setBannerExpiresAt(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                      className={`${INPUT_CLASS} tabular-nums`}
                     />
                   </div>
                 </div>
@@ -1343,34 +1351,34 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                     type="checkbox"
                     checked={bannerIsActive}
                     onChange={(e) => setBannerIsActive(e.target.checked)}
-                    className="accent-amber-500"
+                    className="accent-[#0e7490]"
                   />
-                  <span className="font-medium text-slate-200">
+                  <span className="font-medium text-[#0f2430]">
                     Enable Banner on Storefront (publishes live immediately within schedule without redeploying)
                   </span>
                 </label>
 
                 {bannerFormError && (
-                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200">
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
                     {bannerFormError}
                   </div>
                 )}
 
-                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-white/[0.07]">
+                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-slate-200/80">
                   <button
                     type="button"
                     onClick={() => {
                       setBannerFormOpen(false);
                       resetBannerForm();
                     }}
-                    className="px-4 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                    className="px-4 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={savingBanner}
-                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full bg-[#0f2430] hover:bg-[#0e7490] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {savingBanner
                       ? 'Saving...'
@@ -1384,20 +1392,20 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           </AnimatePresence>
 
           {/* Banners List */}
-          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
+          <div className={`${CARD_CLASS} overflow-hidden`}>
             {loading ? (
               <AdminTableSkeleton rows={4} />
             ) : banners.length === 0 ? (
               <div className="p-12 text-center">
-                <p className="text-lg font-semibold text-white">
+                <p className="text-base font-semibold text-[#0f2430]">
                   No promotional banners saved yet
                 </p>
-                <p className="text-xs text-slate-400 mt-1.5">
+                <p className="text-xs text-[#546e7a] mt-1.5">
                   Create a scheduled promotional announcement bar to highlight sales or coupon codes live on the storefront.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-white/[0.06]">
+              <div className="divide-y divide-slate-200/70">
                 {banners.map((banner) => {
                   const badge = getScheduleBadge(
                     banner.is_active,
@@ -1407,29 +1415,29 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   return (
                     <div
                       key={banner.id}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/[0.025] transition-colors"
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#f2f8fa] transition-colors"
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleToggleBannerActive(banner)}
-                            className={`px-2 py-0.5 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border cursor-pointer ${badge.className}`}
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border cursor-pointer ${badge.className}`}
                           >
                             {badge.label}
                           </button>
                           {banner.offer_title && (
-                            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                            <span className="text-xs font-bold text-[#0e7490] uppercase tracking-wider">
                               {banner.offer_title}
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-medium text-white">
+                        <p className="text-sm font-semibold text-[#0f2430]">
                           {banner.banner_text}
                         </p>
-                        <p className="text-[11px] text-slate-400 tabular-nums">
+                        <p className="text-[11px] text-[#607b87] tabular-nums">
                           CTA:{' '}
-                          <strong className="text-slate-200">
+                          <strong className="text-[#0f2430]">
                             {banner.cta_text || 'None'}
                           </strong>{' '}
                           → {banner.destination_type}
@@ -1448,7 +1456,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                         <button
                           type="button"
                           onClick={() => handleToggleBannerActive(banner)}
-                          className="px-3 py-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] text-[10px] tracking-[0.12em] uppercase font-semibold text-slate-200 cursor-pointer transition-colors"
+                          className="px-3.5 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-[#0f2430] cursor-pointer transition-colors"
                         >
                           {banner.is_active ? 'Pause' : 'Activate'}
                         </button>
@@ -1456,7 +1464,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           type="button"
                           onClick={() => openEditBanner(banner)}
                           aria-label="Edit banner"
-                          className="p-1.5 rounded-lg border border-white/[0.1] text-slate-300 hover:text-white hover:bg-white/[0.07] cursor-pointer transition-colors"
+                          className="p-2 rounded-xl border border-slate-200 bg-white text-[#4a6470] hover:text-[#0e7490] hover:border-[#0e7490]/40 hover:bg-cyan-50/50 cursor-pointer transition-colors"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -1464,7 +1472,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           type="button"
                           onClick={() => setConfirmDeleteBanner(banner)}
                           aria-label="Delete banner"
-                          className="p-1.5 rounded-lg border border-white/[0.1] text-slate-400 hover:text-rose-300 hover:border-rose-500/35 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                          className="p-2 rounded-xl border border-slate-200 bg-white text-[#607b87] hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 cursor-pointer transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1486,7 +1494,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-[#071c27]/60 backdrop-blur-[3px] flex items-center justify-center p-4"
             onClick={() => !deletingOffer && setConfirmDeleteOffer(null)}
             role="dialog"
             aria-modal="true"
@@ -1496,16 +1504,16 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.22, ease: ADMIN_EASE }}
-              className="w-full max-w-md rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 space-y-4 shadow-2xl"
+              className="w-full max-w-md rounded-[26px] bg-white text-[#0f2430] border border-white p-6 space-y-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-[11px] tracking-[0.18em] uppercase text-rose-400 font-semibold">
+              <p className="text-[11px] tracking-[0.14em] uppercase text-rose-600 font-semibold">
                 Confirm Offer Deletion
               </p>
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-[#0f2430]">
                 Delete &ldquo;{confirmDeleteOffer.title}&rdquo;?
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-xs text-[#546e7a] leading-relaxed">
                 Existing placed orders preserve their historical discount amounts and coupon text. This removes the active offer rule.
               </p>
               <div className="flex justify-end gap-2.5 pt-2">
@@ -1513,7 +1521,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={deletingOffer}
                   onClick={() => setConfirmDeleteOffer(null)}
-                  className="px-4 py-2 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1521,7 +1529,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={deletingOffer}
                   onClick={handleDeleteOfferConfirmed}
-                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-[11px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500 cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded-full bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 cursor-pointer disabled:opacity-50"
                 >
                   {deletingOffer ? 'Deleting...' : 'Delete Offer'}
                 </button>
@@ -1539,7 +1547,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-[#071c27]/60 backdrop-blur-[3px] flex items-center justify-center p-4"
             onClick={() => !deletingBanner && setConfirmDeleteBanner(null)}
             role="dialog"
             aria-modal="true"
@@ -1549,16 +1557,16 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.22, ease: ADMIN_EASE }}
-              className="w-full max-w-md rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 space-y-4 shadow-2xl"
+              className="w-full max-w-md rounded-[26px] bg-white text-[#0f2430] border border-white p-6 space-y-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-[11px] tracking-[0.18em] uppercase text-rose-400 font-semibold">
+              <p className="text-[11px] tracking-[0.14em] uppercase text-rose-600 font-semibold">
                 Confirm Banner Deletion
               </p>
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-[#0f2430]">
                 Delete this promotional banner?
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#546e7a]">
                 {confirmDeleteBanner.banner_text}
               </p>
               <div className="flex justify-end gap-2.5 pt-2">
@@ -1566,7 +1574,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={deletingBanner}
                   onClick={() => setConfirmDeleteBanner(null)}
-                  className="px-4 py-2 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                  className="px-4 py-2 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1574,7 +1582,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={deletingBanner}
                   onClick={handleDeleteBannerConfirmed}
-                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-[11px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500 cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded-full bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 cursor-pointer disabled:opacity-50"
                 >
                   {deletingBanner ? 'Deleting...' : 'Delete Banner'}
                 </button>

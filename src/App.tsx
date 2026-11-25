@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { AccountView } from './components/AccountView';
 import { AuthModal } from './components/AuthModal';
@@ -10,6 +11,7 @@ import { HeroSection } from './components/HeroSection';
 import { Navbar } from './components/Navbar';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { ProductGrid } from './components/ProductGrid';
+import { STORE_PAGE_VARIANTS } from './components/StoreMotion';
 import { StoryAndNewsletter } from './components/StoryAndNewsletter';
 import { isDemoProductId } from './data/catalog';
 import { isSupabaseConfigured, supabase, SUPABASE_URL } from './lib/supabase';
@@ -42,6 +44,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<AppView>('storefront');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('All');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
@@ -172,7 +175,7 @@ export default function App() {
     if (view === 'storefront' && sectionId) {
       setTimeout(() => {
         document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
-      }, 60);
+      }, 90);
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -210,20 +213,20 @@ export default function App() {
     navigateView('storefront', 'shop');
   };
 
-  const handleAddToCart = (product: Product, size?: string, qty = 1) => {
-    if (isDemoProductId(product.id)) return;
+  const addItemToCartState = (product: Product, size?: string, qty = 1): boolean => {
+    if (isDemoProductId(product.id)) return false;
     const validSizes = getConfiguredSizes(product);
-    if (validSizes.length === 0) return;
+    if (validSizes.length === 0) return false;
 
     const requested = size?.trim();
     const chosenSize = requested
       ? validSizes.find((s) => s.toLowerCase() === requested.toLowerCase())
       : getFirstAvailableSize(product);
 
-    if (!chosenSize) return;
+    if (!chosenSize) return false;
 
     const availableStock = getAvailableStockForSize(product, chosenSize);
-    if (availableStock <= 0) return;
+    if (availableStock <= 0) return false;
 
     setCart((prev) => {
       const existing = prev.find(
@@ -243,7 +246,21 @@ export default function App() {
       const initialQty = Math.min(availableStock, Math.max(1, qty));
       return [...prev, { productId: product.id, size: chosenSize, qty: initialQty }];
     });
-    setCartOpen(true);
+    return true;
+  };
+
+  const handleAddToCart = (product: Product, size?: string, qty = 1) => {
+    const added = addItemToCartState(product, size, qty);
+    if (added) {
+      setCartOpen(true);
+    }
+  };
+
+  const handleBuyNow = (product: Product, size: string, qty: number) => {
+    const added = addItemToCartState(product, size, qty);
+    if (added) {
+      handleProceedToCheckout();
+    }
   };
 
   const handleChangeCartQty = (productId: string, size: string, delta: number) => {
@@ -298,6 +315,11 @@ export default function App() {
     }
   };
 
+  const handleGlobalSearchSubmit = (query: string) => {
+    setGlobalSearchQuery(query);
+    navigateView('storefront', 'shop');
+  };
+
   const relatedProducts = useMemo(() => {
     if (!selectedProduct) return [];
     return products
@@ -311,7 +333,7 @@ export default function App() {
   }, [products, selectedProduct]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5f2eb] text-[#211f1b]">
+    <div className="min-h-screen flex flex-col bg-[#faf7f2] text-[#1f1d1a] overflow-x-clip">
       <Navbar
         activeView={activeView}
         onNavigateView={navigateView}
@@ -322,66 +344,116 @@ export default function App() {
         profile={profile}
         activeBanner={activeBanner}
         onBannerCtaClick={handleBannerCtaClick}
+        searchQuery={globalSearchQuery}
+        onSearchChange={setGlobalSearchQuery}
+        onSearchSubmit={handleGlobalSearchSubmit}
       />
 
       <main className="flex-1">
-        {activeView === 'storefront' && (
-          <>
-            <HeroSection onExploreClick={() => navigateView('storefront', 'shop')} />
-            <CollectionsSection onSelectCategory={handleSelectCategory} />
-            <ProductGrid
-              products={products}
-              loading={loadingProducts}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              onOpenProduct={handleOpenProduct}
-              onQuickAdd={(product) => handleAddToCart(product)}
-            />
-            <StoryAndNewsletter onDiscoverClick={() => navigateView('storefront', 'shop')} />
-          </>
-        )}
+        <AnimatePresence mode="wait">
+          {activeView === 'storefront' && (
+            <motion.div
+              key="storefront"
+              variants={STORE_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <HeroSection
+                onExploreClick={() => navigateView('storefront', 'shop')}
+                onSelectCategory={handleSelectCategory}
+              />
+              <CollectionsSection
+                onSelectCategory={handleSelectCategory}
+                products={products}
+                onOpenProduct={handleOpenProduct}
+              />
+              <ProductGrid
+                products={products}
+                loading={loadingProducts}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                onOpenProduct={handleOpenProduct}
+                onQuickAdd={(product, size) => handleAddToCart(product, size)}
+                externalSearchQuery={globalSearchQuery}
+                onExternalSearchChange={setGlobalSearchQuery}
+              />
+              <StoryAndNewsletter
+                onDiscoverClick={() => navigateView('storefront', 'shop')}
+              />
+            </motion.div>
+          )}
 
-        {activeView === 'product' && selectedProduct && (
-          <ProductDetailPage
-            product={selectedProduct}
-            relatedProducts={relatedProducts}
-            onBack={() => navigateView('storefront', 'shop')}
-            onAddToCart={(prod, size, qty) => handleAddToCart(prod, size, qty)}
-            onSelectProduct={handleOpenProduct}
-          />
-        )}
+          {activeView === 'product' && selectedProduct && (
+            <motion.div
+              key={`product-${selectedProduct.id}`}
+              variants={STORE_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <ProductDetailPage
+                product={selectedProduct}
+                relatedProducts={relatedProducts}
+                onBack={() => navigateView('storefront', 'shop')}
+                onAddToCart={(prod, size, qty) => handleAddToCart(prod, size, qty)}
+                onBuyNow={handleBuyNow}
+                onSelectProduct={handleOpenProduct}
+              />
+            </motion.div>
+          )}
 
-        {activeView === 'checkout' && (
-          <CheckoutView
-            user={user}
-            profile={profile}
-            cart={cart}
-            products={products}
-            appliedCouponCode={appliedCouponCode}
-            onCouponCodeChange={setAppliedCouponCode}
-            onBack={() => navigateView('storefront', 'shop')}
-            onRequireAuth={() =>
-              handleOpenAuth('login', 'Sign in or create an account to place your order.')
-            }
-            onOrderCreated={() => {
-              setCart([]);
-              setAppliedCouponCode(null);
-              void loadCatalog();
-            }}
-            onViewOrders={() => navigateView('account')}
-          />
-        )}
+          {activeView === 'checkout' && (
+            <motion.div
+              key="checkout"
+              variants={STORE_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <CheckoutView
+                user={user}
+                profile={profile}
+                cart={cart}
+                products={products}
+                appliedCouponCode={appliedCouponCode}
+                onCouponCodeChange={setAppliedCouponCode}
+                onBack={() => navigateView('storefront', 'shop')}
+                onRequireAuth={() =>
+                  handleOpenAuth(
+                    'login',
+                    'Sign in or create an account to place your order.'
+                  )
+                }
+                onOrderCreated={() => {
+                  setCart([]);
+                  setAppliedCouponCode(null);
+                  void loadCatalog();
+                }}
+                onViewOrders={() => navigateView('account')}
+              />
+            </motion.div>
+          )}
 
-        {activeView === 'account' && (
-          <AccountView
-            user={user}
-            profile={profile}
-            onBack={() => navigateView('storefront', 'shop')}
-            onProfileUpdated={() => user && loadProfile(user.id)}
-            onOrderCancelled={loadCatalog}
-            onLogout={handleLogout}
-          />
-        )}
+          {activeView === 'account' && (
+            <motion.div
+              key="account"
+              variants={STORE_PAGE_VARIANTS}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <AccountView
+                user={user}
+                profile={profile}
+                onBack={() => navigateView('storefront', 'shop')}
+                onProfileUpdated={() => user && loadProfile(user.id)}
+                onOrderCancelled={loadCatalog}
+                onLogout={handleLogout}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       <Footer onNavigateView={navigateView} />

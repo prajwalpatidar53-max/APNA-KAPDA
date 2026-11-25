@@ -68,6 +68,8 @@ const PAYMENT_STATUSES: PaymentStatus[] = [
   'cancelled',
 ];
 
+type OrderSortOption = 'newest' | 'oldest' | 'amount_desc' | 'amount_asc';
+
 function isAdminCancellable(order: Order): boolean {
   return ADMIN_CANCELLABLE_STATUSES.includes(order.order_status);
 }
@@ -117,6 +119,7 @@ export function AdminOrders({
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | OrderStatus>('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | PaymentStatus>('all');
   const [orderScopeFilter, setOrderScopeFilter] = useState<'all' | 'live' | 'test'>('all');
+  const [sortBy, setSortBy] = useState<OrderSortOption>('newest');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [editOrderStatus, setEditOrderStatus] = useState<OrderStatus>('pending');
@@ -164,7 +167,7 @@ export function AdminOrders({
 
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orders.filter((o) => {
+    const list = orders.filter((o) => {
       const matchScope =
         orderScopeFilter === 'all' ||
         (orderScopeFilter === 'test' ? Boolean(o.is_test_order) : !o.is_test_order);
@@ -180,7 +183,20 @@ export function AdminOrders({
         o.customer_phone.toLowerCase().includes(q);
       return matchScope && matchOrderStatus && matchPaymentStatus && matchQuery;
     });
-  }, [orders, search, orderStatusFilter, paymentStatusFilter, orderScopeFilter]);
+
+    return [...list].sort((a, b) => {
+      if (sortBy === 'oldest') {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      if (sortBy === 'amount_desc') {
+        return Number(b.total_inr || 0) - Number(a.total_inr || 0);
+      }
+      if (sortBy === 'amount_asc') {
+        return Number(a.total_inr || 0) - Number(b.total_inr || 0);
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [orders, search, orderStatusFilter, paymentStatusFilter, orderScopeFilter, sortBy]);
 
   const openOrderDrawer = (order: Order) => {
     setSelectedOrder(order);
@@ -272,16 +288,16 @@ export function AdminOrders({
   return (
     <div className="space-y-5">
       {/* Filter Toolbar */}
-      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
+      <div className="rounded-[22px] bg-white/88 backdrop-blur-sm border border-white shadow-[0_8px_28px_-14px_rgba(15,36,48,0.12)] p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#7c94a0] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search order #, customer name, email..."
-              className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 placeholder:text-slate-500 transition-colors"
+              className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430] placeholder:text-[#7c94a0] transition-colors"
             />
           </div>
 
@@ -291,7 +307,7 @@ export function AdminOrders({
               setOrderStatusFilter(e.target.value as 'all' | OrderStatus)
             }
             aria-label="Filter by order status"
-            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100 capitalize"
+            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430] capitalize"
           >
             <option value="all">All Order Statuses</option>
             {ORDER_STATUSES.map((s) => (
@@ -307,7 +323,7 @@ export function AdminOrders({
               setPaymentStatusFilter(e.target.value as 'all' | PaymentStatus)
             }
             aria-label="Filter by payment status"
-            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100"
+            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430]"
           >
             <option value="all">All Payment Statuses</option>
             {PAYMENT_STATUSES.map((p) => (
@@ -323,48 +339,63 @@ export function AdminOrders({
               setOrderScopeFilter(e.target.value as 'all' | 'live' | 'test')
             }
             aria-label="Filter by order scope"
-            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.09] focus:border-amber-400/60 outline-none text-slate-100"
+            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430]"
           >
             <option value="all">All Orders (Live &amp; QA Test)</option>
             <option value="live">Live Customer Orders</option>
             <option value="test">QA Test Orders Only</option>
           </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as OrderSortOption)}
+            aria-label="Sort orders"
+            className="px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430]"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="amount_desc">Highest Total</option>
+            <option value="amount_asc">Lowest Total</option>
+          </select>
         </div>
 
-        <p className="text-xs text-slate-400 tabular-nums shrink-0">
-          Showing <strong className="text-white">{filteredOrders.length}</strong> of{' '}
-          {orders.length} orders
+        <p className="text-xs text-[#546e7a] tabular-nums shrink-0">
+          Showing{' '}
+          <strong className="text-[#0f2430] font-semibold">
+            {filteredOrders.length}
+          </strong>{' '}
+          of {orders.length} orders
         </p>
       </div>
 
       {listNotice && (
         <div
           role="status"
-          className={`p-3.5 rounded-xl border text-xs flex items-center gap-2.5 ${
+          className={`p-3.5 rounded-2xl border text-xs flex items-center gap-2.5 ${
             listNotice.type === 'err'
-              ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
-              : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
           {listNotice.type === 'err' ? (
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
           ) : (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
           )}
           <span>{listNotice.text}</span>
         </div>
       )}
 
       {/* Orders Table / Mobile List */}
-      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
+      <div className="rounded-[22px] bg-white/88 backdrop-blur-sm border border-white shadow-[0_8px_28px_-14px_rgba(15,36,48,0.12)] overflow-hidden">
         {loading ? (
           <AdminTableSkeleton rows={6} />
         ) : filteredOrders.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-base font-semibold text-white">
+            <p className="text-base font-semibold text-[#0f2430]">
               No matching orders
             </p>
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-[#546e7a] mt-1.5">
               {orders.length === 0
                 ? 'Customer orders placed through checkout will appear here.'
                 : 'Try adjusting your order number search or status filters.'}
@@ -375,7 +406,7 @@ export function AdminOrders({
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[11px] font-medium text-slate-400">
+                  <tr className="border-b border-slate-200/80 bg-[#f6fafb] text-[11px] font-semibold text-[#607b87]">
                     <th className="py-3.5 px-5">Order #</th>
                     <th className="py-3.5 px-3">Date</th>
                     <th className="py-3.5 px-3">Customer</th>
@@ -385,7 +416,7 @@ export function AdminOrders({
                     <th className="py-3.5 px-5 text-right">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.06] text-xs">
+                <tbody className="divide-y divide-slate-200/70 text-xs">
                   {filteredOrders.map((order) => {
                     const itemCount =
                       order.order_items?.reduce(
@@ -396,41 +427,41 @@ export function AdminOrders({
                       <tr
                         key={order.id}
                         onClick={() => openOrderDrawer(order)}
-                        className="hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                        className="hover:bg-[#f2f8fa] transition-colors cursor-pointer group"
                       >
-                        <td className="py-3.5 px-5 font-semibold text-white tabular-nums whitespace-nowrap">
+                        <td className="py-3.5 px-5 font-semibold text-[#0f2430] tabular-nums whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <span className="group-hover:text-amber-300 transition-colors">
+                            <span className="group-hover:text-[#0e7490] transition-colors">
                               {order.order_number}
                             </span>
                             {order.is_test_order && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/30">
+                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                 TEST
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="py-3.5 px-3 text-slate-400 tabular-nums whitespace-nowrap">
+                        <td className="py-3.5 px-3 text-[#607b87] tabular-nums whitespace-nowrap">
                           {formatDateTime(order.created_at)}
                         </td>
                         <td className="py-3.5 px-3">
-                          <p className="font-medium text-slate-100">
+                          <p className="font-semibold text-[#0f2430]">
                             {order.customer_name}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-[#607b87]">
                             {order.customer_email}
                           </p>
                         </td>
-                        <td className="py-3.5 px-3 text-slate-300 tabular-nums whitespace-nowrap">
+                        <td className="py-3.5 px-3 text-[#3c5662] tabular-nums whitespace-nowrap">
                           {itemCount} {itemCount === 1 ? 'item' : 'items'}
                         </td>
                         <td className="py-3.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col items-start gap-1">
-                            <span className="text-[11px] font-medium uppercase text-slate-400">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#607b87]">
                               {order.payment_method === 'cod' ? 'COD' : 'Online'}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border capitalize ${paymentStatusBadgeV2(
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${paymentStatusBadgeV2(
                                 order.payment_status
                               )}`}
                             >
@@ -441,20 +472,20 @@ export function AdminOrders({
                         <td className="py-3.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col items-start gap-1">
                             <span
-                              className={`px-2.5 py-1 rounded-md text-[11px] font-medium border capitalize ${orderStatusBadgeV2(
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${orderStatusBadgeV2(
                                 order.order_status
                               )}`}
                             >
                               {order.order_status}
                             </span>
                             {order.order_status === 'cancelled' && order.cancelled_by && (
-                              <span className="text-[11px] text-slate-500 capitalize">
+                              <span className="text-[11px] text-[#708a96] capitalize">
                                 By {order.cancelled_by}
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="py-3.5 px-5 text-right font-semibold text-white tabular-nums whitespace-nowrap">
+                        <td className="py-3.5 px-5 text-right font-semibold text-[#0f2430] tabular-nums whitespace-nowrap">
                           {formatINR(order.total_inr)}
                         </td>
                       </tr>
@@ -465,7 +496,7 @@ export function AdminOrders({
             </div>
 
             {/* Mobile Order Cards */}
-            <div className="md:hidden divide-y divide-white/[0.06]">
+            <div className="md:hidden divide-y divide-slate-200/70">
               {filteredOrders.map((order) => {
                 const itemCount =
                   order.order_items?.reduce(
@@ -477,24 +508,24 @@ export function AdminOrders({
                     key={order.id}
                     type="button"
                     onClick={() => openOrderDrawer(order)}
-                    className="w-full text-left p-4 hover:bg-white/[0.04] transition-colors cursor-pointer space-y-2"
+                    className="w-full text-left p-4 hover:bg-[#f2f8fa] transition-colors cursor-pointer space-y-2"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white tabular-nums">
+                        <span className="text-sm font-semibold text-[#0f2430] tabular-nums">
                           {order.order_number}
                         </span>
                         {order.is_test_order && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/30">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                             TEST
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-semibold text-white tabular-nums">
+                      <span className="text-sm font-semibold text-[#0f2430] tabular-nums">
                         {formatINR(order.total_inr)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center justify-between text-xs text-[#607b87]">
                       <span className="truncate">{order.customer_name}</span>
                       <span className="tabular-nums shrink-0">
                         {itemCount} {itemCount === 1 ? 'item' : 'items'}
@@ -502,14 +533,14 @@ export function AdminOrders({
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-0.5">
                       <span
-                        className={`px-2 py-0.5 rounded-md text-[11px] font-medium border capitalize ${orderStatusBadgeV2(
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${orderStatusBadgeV2(
                           order.order_status
                         )}`}
                       >
                         {order.order_status}
                       </span>
                       <span
-                        className={`px-2 py-0.5 rounded-md text-[11px] font-medium border capitalize ${paymentStatusBadgeV2(
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border capitalize ${paymentStatusBadgeV2(
                           order.payment_status
                         )}`}
                       >
@@ -533,7 +564,7 @@ export function AdminOrders({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] flex justify-end"
+            className="fixed inset-0 z-50 bg-[#071c27]/55 backdrop-blur-[3px] flex justify-end"
             onClick={() => setSelectedOrder(null)}
           >
             <motion.aside
@@ -541,15 +572,15 @@ export function AdminOrders({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ duration: 0.28, ease: ADMIN_EASE }}
-              className="w-full max-w-xl bg-[#0d141f] h-full overflow-y-auto border-l border-white/[0.1] shadow-2xl flex flex-col"
+              className="w-full max-w-xl bg-[#f4f8fa] text-[#0f2430] h-full overflow-y-auto border-l border-white shadow-2xl flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-6 py-5 border-b border-white/[0.08] flex items-center justify-between sticky top-0 bg-[#0d141f]/95 backdrop-blur-md z-10">
+              <div className="px-6 py-5 border-b border-slate-200/80 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-10">
                 <div>
-                  <p className="text-xs font-medium text-amber-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0e7490]">
                     Order Details
                   </p>
-                  <h3 className="font-sans text-xl font-semibold text-white tabular-nums mt-0.5">
+                  <h3 className="font-sans text-xl font-semibold text-[#0f2430] tabular-nums mt-0.5">
                     {selectedOrder.order_number}
                   </h3>
                 </div>
@@ -557,7 +588,7 @@ export function AdminOrders({
                   type="button"
                   onClick={() => setSelectedOrder(null)}
                   aria-label="Close order details"
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] cursor-pointer"
+                  className="p-2 rounded-full text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -565,18 +596,18 @@ export function AdminOrders({
 
               <div className="p-6 space-y-5 flex-1">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-slate-400 tabular-nums">
+                  <p className="text-xs text-[#607b87] tabular-nums">
                     Placed on {formatDateTime(selectedOrder.created_at)}
                   </p>
                   {selectedOrder.is_test_order && (
-                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-400/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                       QA Test Order
                     </span>
                   )}
                 </div>
 
                 {selectedOrder.is_test_order && (
-                  <div className="rounded-xl bg-amber-500/10 border border-amber-400/25 p-3.5 text-xs text-amber-200 leading-relaxed">
+                  <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 leading-relaxed">
                     <strong>Isolated Bulk Shipping QA Test Order:</strong> Synthetic
                     contact &amp; delivery details for dispatch PDF/label testing.
                     Product inventory stock was not deducted and this order is
@@ -586,9 +617,9 @@ export function AdminOrders({
 
                 {/* Cancellation Audit Card */}
                 {selectedOrder.order_status === 'cancelled' && (
-                  <div className="rounded-xl bg-rose-500/10 border border-rose-500/25 p-4 space-y-2 text-xs">
+                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-2 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-rose-300">
+                      <span className="font-semibold text-rose-800">
                         Order Cancelled &middot; Initiated by{' '}
                         {selectedOrder.cancelled_by === 'customer'
                           ? 'Customer'
@@ -597,18 +628,18 @@ export function AdminOrders({
                             : 'System'}
                       </span>
                       {selectedOrder.cancelled_at && (
-                        <span className="text-[11px] text-rose-200/80 tabular-nums">
+                        <span className="text-[11px] text-rose-700 tabular-nums">
                           {formatDateTime(selectedOrder.cancelled_at)}
                         </span>
                       )}
                     </div>
-                    <p className="text-rose-200/90">
+                    <p className="text-rose-800">
                       {getAdminRefundSummary(selectedOrder)}
                     </p>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-300 pt-1">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-rose-900/80 pt-1">
                       <span>
                         Inventory Handling:{' '}
-                        <strong className="text-white">
+                        <strong className="text-rose-950">
                           {selectedOrder.stock_restoration_status === 'restored' ||
                           selectedOrder.stock_restored
                             ? 'Restored (Historical)'
@@ -617,7 +648,7 @@ export function AdminOrders({
                       </span>
                       <span>
                         Reason:{' '}
-                        <strong className="text-white">
+                        <strong className="text-rose-950">
                           {selectedOrder.cancellation_reason || 'No reason provided'}
                         </strong>
                       </span>
@@ -626,21 +657,21 @@ export function AdminOrders({
                 )}
 
                 {/* Status Controls */}
-                <div className="rounded-2xl bg-[#131d2b]/90 border border-white/[0.08] p-5 space-y-4">
+                <div className="rounded-2xl bg-white border border-slate-200/80 p-5 space-y-4 shadow-sm">
                   <div className="flex items-center gap-2">
-                    <PackageCheck className="w-4 h-4 text-amber-400" />
-                    <h4 className="font-sans text-xs font-semibold text-white">
+                    <PackageCheck className="w-4 h-4 text-[#0e7490]" />
+                    <h4 className="font-sans text-xs font-semibold text-[#0f2430]">
                       Update Fulfillment &amp; Payment Status
                     </h4>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">
+                      <label className="block text-xs font-medium text-[#546e7a] mb-1.5">
                         Order Status
                       </label>
                       {selectedOrder.order_status === 'cancelled' ? (
-                        <div className="px-3 py-2.5 rounded-xl text-xs bg-[#080d14] border border-rose-500/25 text-rose-300 font-semibold">
+                        <div className="px-3 py-2.5 rounded-xl text-xs bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
                           Cancelled
                         </div>
                       ) : (
@@ -649,7 +680,7 @@ export function AdminOrders({
                           onChange={(e) =>
                             setEditOrderStatus(e.target.value as OrderStatus)
                           }
-                          className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.1] outline-none text-white capitalize"
+                          className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430] capitalize"
                         >
                           {FULFILLMENT_STATUSES.map((s) => (
                             <option key={s} value={s} className="capitalize">
@@ -661,7 +692,7 @@ export function AdminOrders({
                     </div>
 
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1.5">
+                      <label className="block text-xs font-medium text-[#546e7a] mb-1.5">
                         Payment Status
                       </label>
                       <select
@@ -669,7 +700,7 @@ export function AdminOrders({
                         onChange={(e) =>
                           setEditPaymentStatus(e.target.value as PaymentStatus)
                         }
-                        className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.1] outline-none text-white"
+                        className="w-full px-3 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430]"
                       >
                         {PAYMENT_STATUSES.map((p) => (
                           <option key={p} value={p}>
@@ -684,8 +715,8 @@ export function AdminOrders({
                     <p
                       className={`text-xs p-3 rounded-xl border ${
                         feedback.type === 'err'
-                          ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
-                          : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
+                          ? 'bg-rose-50 border-rose-200 text-rose-800'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                       }`}
                     >
                       {feedback.text}
@@ -697,7 +728,7 @@ export function AdminOrders({
                       type="button"
                       disabled={saving}
                       onClick={handleSaveOrderUpdate}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 transition-colors cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0f2430] text-white text-xs font-semibold hover:bg-[#0e7490] transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>{saving ? 'Updating...' : 'Save Order Status'}</span>
@@ -707,7 +738,7 @@ export function AdminOrders({
                       <button
                         type="button"
                         onClick={() => openCancelDialog(selectedOrder)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-500/40 text-rose-300 text-xs font-medium hover:bg-rose-500/15 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer"
                       >
                         <Ban className="w-3.5 h-3.5" />
                         <span>Cancel Order</span>
@@ -719,27 +750,27 @@ export function AdminOrders({
                 {/* Customer & Shipping Address */}
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
-                      <div className="flex items-center gap-2 text-amber-400 mb-2">
+                    <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-[#0e7490] mb-2">
                         <User className="w-3.5 h-3.5" />
-                        <span className="text-xs font-medium">Customer</span>
+                        <span className="text-xs font-semibold">Customer</span>
                       </div>
-                      <p className="text-xs font-semibold text-white">
+                      <p className="text-xs font-semibold text-[#0f2430]">
                         {selectedOrder.customer_name}
                       </p>
-                      <p className="text-xs text-slate-400 mt-1 break-all">
+                      <p className="text-xs text-[#607b87] mt-1 break-all">
                         {selectedOrder.customer_email}
                       </p>
-                      <p className="text-xs text-slate-300 mt-0.5 tabular-nums">
+                      <p className="text-xs text-[#3c5662] mt-0.5 tabular-nums">
                         {selectedOrder.customer_phone}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
+                    <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-sm">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 text-teal-400">
+                        <div className="flex items-center gap-2 text-[#0e7490]">
                           <MapPin className="w-3.5 h-3.5" />
-                          <span className="text-xs font-medium">
+                          <span className="text-xs font-semibold">
                             Shipping Address
                           </span>
                         </div>
@@ -757,12 +788,12 @@ export function AdminOrders({
                               pincode: selectedOrder.shipping_address?.pincode || '',
                             });
                           }}
-                          className="text-xs font-medium text-amber-400 hover:text-amber-300 cursor-pointer"
+                          className="text-xs font-semibold text-[#0e7490] hover:text-[#0f2430] cursor-pointer"
                         >
                           {editingDelivery ? 'Cancel' : 'Edit'}
                         </button>
                       </div>
-                      <p className="text-xs text-slate-200 leading-relaxed">
+                      <p className="text-xs text-[#334e5a] leading-relaxed">
                         {selectedOrder.shipping_address.line1}
                         {selectedOrder.shipping_address.line2
                           ? `, ${selectedOrder.shipping_address.line2}`
@@ -770,7 +801,7 @@ export function AdminOrders({
                         <br />
                         {selectedOrder.shipping_address.city},{' '}
                         {selectedOrder.shipping_address.state} &ndash;{' '}
-                        <span className="tabular-nums">
+                        <span className="tabular-nums font-medium">
                           {selectedOrder.shipping_address.pincode}
                         </span>
                       </p>
@@ -778,8 +809,8 @@ export function AdminOrders({
                   </div>
 
                   {editingDelivery && (
-                    <div className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] p-4 space-y-3">
-                      <p className="text-xs font-semibold text-amber-300">
+                    <div className="rounded-2xl border border-cyan-200 bg-cyan-50/50 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-[#0e7490]">
                         Fix Customer Contact / Delivery Address
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
@@ -793,7 +824,7 @@ export function AdminOrders({
                             }))
                           }
                           placeholder="Customer Name *"
-                          className="px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="tel"
@@ -805,7 +836,7 @@ export function AdminOrders({
                             }))
                           }
                           placeholder="Phone (10 digits) *"
-                          className="px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="text"
@@ -814,7 +845,7 @@ export function AdminOrders({
                             setDeliveryDraft((d) => ({ ...d, line1: e.target.value }))
                           }
                           placeholder="Address Line 1 *"
-                          className="sm:col-span-2 px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="sm:col-span-2 px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="text"
@@ -823,7 +854,7 @@ export function AdminOrders({
                             setDeliveryDraft((d) => ({ ...d, line2: e.target.value }))
                           }
                           placeholder="Address Line 2 (Optional)"
-                          className="sm:col-span-2 px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="sm:col-span-2 px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="text"
@@ -832,7 +863,7 @@ export function AdminOrders({
                             setDeliveryDraft((d) => ({ ...d, city: e.target.value }))
                           }
                           placeholder="City *"
-                          className="px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="text"
@@ -841,7 +872,7 @@ export function AdminOrders({
                             setDeliveryDraft((d) => ({ ...d, state: e.target.value }))
                           }
                           placeholder="State *"
-                          className="px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none"
+                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none"
                         />
                         <input
                           type="text"
@@ -854,7 +885,7 @@ export function AdminOrders({
                             }))
                           }
                           placeholder="6-digit PIN Code *"
-                          className="px-3 py-2 rounded-lg bg-[#080d14] border border-white/[0.1] text-white outline-none tabular-nums"
+                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-[#0e7490] text-[#0f2430] outline-none tabular-nums"
                         />
                       </div>
                       <div className="flex justify-end">
@@ -890,7 +921,7 @@ export function AdminOrders({
                             });
                             await onRefresh();
                           }}
-                          className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 cursor-pointer disabled:opacity-50"
+                          className="px-4 py-2 rounded-full bg-[#0f2430] text-white text-xs font-semibold hover:bg-[#0e7490] transition-colors cursor-pointer disabled:opacity-50"
                         >
                           {savingDelivery ? 'Saving...' : 'Save Delivery Details'}
                         </button>
@@ -900,19 +931,19 @@ export function AdminOrders({
                 </div>
 
                 {/* Ordered Items */}
-                <div className="rounded-xl border border-white/[0.08] overflow-hidden">
-                  <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.07]">
-                    <span className="text-xs font-semibold text-white">
+                <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 bg-[#f6fafb] border-b border-slate-200/80">
+                    <span className="text-xs font-semibold text-[#0f2430]">
                       Ordered Items
                     </span>
                   </div>
-                  <div className="divide-y divide-white/[0.06]">
+                  <div className="divide-y divide-slate-200/70">
                     {(selectedOrder.order_items ?? []).map((item, idx) => {
                       const itemKey = item.id ?? `${item.product_id}-${idx}`;
                       return (
                         <div key={itemKey} className="p-4">
                           <div className="flex items-center gap-3.5">
-                            <div className="w-12 h-16 rounded-lg bg-[#16202e] border border-white/[0.07] overflow-hidden shrink-0">
+                            <div className="w-12 h-16 rounded-xl bg-slate-100 border border-slate-200/80 overflow-hidden shrink-0">
                               {item.product_image && (
                                 <img
                                   src={item.product_image}
@@ -923,15 +954,15 @@ export function AdminOrders({
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-white truncate">
+                              <p className="text-xs font-semibold text-[#0f2430] truncate">
                                 {item.product_name}
                               </p>
-                              <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                              <p className="text-[11px] text-[#607b87] mt-0.5 tabular-nums">
                                 Size: {item.selected_size} &middot; Qty: {item.quantity}{' '}
                                 &middot; {formatINR(item.unit_price_inr)} each
                               </p>
                             </div>
-                            <p className="text-xs font-semibold text-white tabular-nums">
+                            <p className="text-xs font-semibold text-[#0f2430] tabular-nums">
                               {formatINR(item.unit_price_inr * item.quantity)}
                             </p>
                           </div>
@@ -942,23 +973,23 @@ export function AdminOrders({
                 </div>
 
                 {/* Totals & Notes */}
-                <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4 space-y-2 text-xs">
-                  <div className="flex justify-between text-slate-400">
+                <div className="rounded-2xl bg-white border border-slate-200/80 p-4 space-y-2 text-xs shadow-sm">
+                  <div className="flex justify-between text-[#607b87]">
                     <span>Payment Method</span>
-                    <span className="font-medium text-slate-100">
+                    <span className="font-semibold text-[#0f2430]">
                       {selectedOrder.payment_method === 'cod'
                         ? 'Cash on Delivery (COD)'
                         : 'Online Payment (Pending Verification)'}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-400 tabular-nums">
+                  <div className="flex justify-between text-[#607b87] tabular-nums">
                     <span>Subtotal</span>
-                    <span className="text-slate-200">
+                    <span className="text-[#0f2430] font-medium">
                       {formatINR(selectedOrder.subtotal_inr)}
                     </span>
                   </div>
                   {(selectedOrder.discount_inr ?? 0) > 0 && (
-                    <div className="flex justify-between text-emerald-300 tabular-nums">
+                    <div className="flex justify-between text-emerald-700 font-medium tabular-nums">
                       <span>
                         Discount (
                         {selectedOrder.applied_coupon_code
@@ -969,24 +1000,24 @@ export function AdminOrders({
                       <span>&minus;{formatINR(selectedOrder.discount_inr ?? 0)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-slate-400 tabular-nums">
+                  <div className="flex justify-between text-[#607b87] tabular-nums">
                     <span>Shipping</span>
-                    <span className="text-slate-200">
+                    <span className="text-[#0f2430] font-medium">
                       {selectedOrder.shipping_inr === 0
                         ? 'Complimentary'
                         : formatINR(selectedOrder.shipping_inr)}
                     </span>
                   </div>
-                  <div className="flex justify-between pt-2.5 border-t border-white/[0.08] text-sm font-semibold text-white tabular-nums">
+                  <div className="flex justify-between pt-2.5 border-t border-slate-200/80 text-sm font-bold text-[#0f2430] tabular-nums">
                     <span>Order Total</span>
                     <span>{formatINR(selectedOrder.total_inr)}</span>
                   </div>
                   {selectedOrder.notes && (
-                    <div className="pt-2.5 border-t border-white/[0.08]">
-                      <span className="text-[11px] font-medium text-slate-400">
+                    <div className="pt-2.5 border-t border-slate-200/80">
+                      <span className="text-[11px] font-semibold text-[#607b87]">
                         Customer Note:
                       </span>
-                      <p className="text-xs text-slate-200 mt-1">
+                      <p className="text-xs text-[#334e5a] mt-1">
                         {selectedOrder.notes}
                       </p>
                     </div>
@@ -1006,7 +1037,7 @@ export function AdminOrders({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-[2px] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[60] bg-[#071c27]/60 backdrop-blur-[3px] flex items-center justify-center p-4"
             onClick={() => !cancelling && setCancelTarget(null)}
             role="dialog"
             aria-modal="true"
@@ -1017,15 +1048,15 @@ export function AdminOrders({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
               transition={{ duration: 0.22, ease: ADMIN_EASE }}
-              className="w-full max-w-lg rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 sm:p-7 shadow-2xl"
+              className="w-full max-w-lg rounded-[26px] bg-white text-[#0f2430] border border-white p-6 sm:p-7 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.08]">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-200/80">
                 <div>
-                  <p className="text-xs font-medium text-rose-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-600">
                     Admin Order Cancellation
                   </p>
-                  <h3 className="font-sans text-xl font-semibold text-white mt-1 tabular-nums">
+                  <h3 className="font-sans text-xl font-semibold text-[#0f2430] mt-1 tabular-nums">
                     Cancel {cancelTarget.order_number}?
                   </h3>
                 </div>
@@ -1034,28 +1065,28 @@ export function AdminOrders({
                   disabled={cancelling}
                   onClick={() => setCancelTarget(null)}
                   aria-label="Close modal"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] cursor-pointer"
+                  className="p-1.5 rounded-full text-[#607b87] hover:text-[#0f2430] hover:bg-slate-100 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="mt-4 space-y-3 text-xs">
-                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.07] space-y-1.5">
-                  <p className="font-semibold text-white">
+                <div className="p-3.5 rounded-2xl bg-[#f4f8fa] border border-slate-200/80 space-y-1.5">
+                  <p className="font-semibold text-[#0f2430]">
                     Customer: {cancelTarget.customer_name} ({cancelTarget.customer_email})
                   </p>
-                  <p className="text-slate-400 tabular-nums">
+                  <p className="text-[#546e7a] tabular-nums">
                     Order Total:{' '}
-                    <strong className="text-white">
+                    <strong className="text-[#0f2430]">
                       {formatINR(cancelTarget.total_inr)}
                     </strong>{' '}
                     &middot; Current Status:{' '}
-                    <strong className="capitalize text-slate-200">
+                    <strong className="capitalize text-[#0f2430]">
                       {cancelTarget.order_status}
                     </strong>
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-[#607b87]">
                     {cancelTarget.payment_status === 'paid'
                       ? 'Payment Handling: Paid online — will be marked "refund_pending" until provider confirms.'
                       : cancelTarget.payment_method === 'cod'
@@ -1064,17 +1095,17 @@ export function AdminOrders({
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-white/[0.07] p-3.5 space-y-2">
-                  <p className="text-[11px] font-semibold text-amber-300">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 space-y-2">
+                  <p className="text-[11px] font-semibold text-amber-800">
                     Manual Inventory Notice
                   </p>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <p className="text-[11px] text-amber-900/80 leading-relaxed">
                     Cancelling an order does not automatically restore stock. Adjust
                     product stock manually in{' '}
-                    <strong className="text-white">Products</strong> if these items
+                    <strong className="text-amber-950">Products</strong> if these items
                     return to inventory.
                   </p>
-                  <ul className="space-y-1 text-[11px] text-slate-200 tabular-nums pt-2 border-t border-white/[0.07]">
+                  <ul className="space-y-1 text-[11px] text-[#0f2430] tabular-nums pt-2 border-t border-amber-200/70">
                     {(cancelTarget.order_items ?? []).map((item, idx) => (
                       <li key={item.id ?? idx} className="flex justify-between">
                         <span>
@@ -1089,7 +1120,7 @@ export function AdminOrders({
 
               <form onSubmit={handleConfirmAdminCancel} className="mt-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-[#3c5662] mb-1.5">
                     Cancellation Reason (Optional)
                   </label>
                   <textarea
@@ -1098,12 +1129,12 @@ export function AdminOrders({
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                     placeholder="e.g. Out of stock verification, customer requested via WhatsApp/email..."
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#080d14] border border-white/[0.1] focus:border-amber-400/60 outline-none text-white placeholder:text-slate-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-[#f4f8fa] border border-slate-200/90 focus:border-[#0e7490] focus:bg-white outline-none text-[#0f2430] placeholder:text-[#7c94a0]"
                   />
                 </div>
 
                 {cancelError && (
-                  <p className="text-xs text-rose-200 bg-rose-500/10 border border-rose-500/25 rounded-xl p-3">
+                  <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-xl p-3">
                     {cancelError}
                   </p>
                 )}
@@ -1113,14 +1144,14 @@ export function AdminOrders({
                     type="button"
                     disabled={cancelling}
                     onClick={() => setCancelTarget(null)}
-                    className="px-5 py-2.5 rounded-xl border border-white/[0.1] text-xs font-medium text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full border border-slate-200 text-xs font-semibold text-[#546e7a] hover:text-[#0f2430] hover:bg-slate-50 cursor-pointer disabled:opacity-50"
                   >
                     Keep Order
                   </button>
                   <button
                     type="submit"
                     disabled={cancelling}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-500 transition-colors cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     <Ban className="w-3.5 h-3.5" />
                     <span>
