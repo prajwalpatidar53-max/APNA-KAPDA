@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Lock, LogOut, ShieldAlert } from 'lucide-react';
+import { motion } from 'motion/react';
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  LogOut,
+  ShieldAlert,
+} from 'lucide-react';
+import { ADMIN_EASE } from './AdminMotion';
 import type { AdminSessionState } from './adminService';
 import {
   sendAdminPasswordReset,
@@ -14,6 +24,9 @@ interface AdminLoginProps {
   onAuthorized: (state: AdminSessionState) => void;
   onRecoveryComplete: () => void;
 }
+
+const BACKDROP_STYLE =
+  'min-h-screen bg-[#080c12] bg-[radial-gradient(ellipse_at_top_left,_rgba(20,62,74,0.34),_transparent_52%),radial-gradient(ellipse_at_bottom_right,_rgba(180,98,38,0.16),_transparent_48%)] text-slate-100 flex items-center justify-center p-5 sm:p-8';
 
 export function AdminLogin({
   sessionState,
@@ -93,22 +106,32 @@ export function AdminLogin({
 
   if (sessionState.status === 'unconfigured') {
     return (
-      <div className="min-h-screen bg-[#151412] text-[#f5f2eb] flex items-center justify-center p-6">
-        <div className="max-w-lg w-full bg-[#fffdf8] text-[#211f1b] border border-[#e5dfd3] p-8">
-          <p className="text-[10px] tracking-[0.26em] uppercase text-[#9a6746] font-bold">
+      <div className={BACKDROP_STYLE}>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: ADMIN_EASE }}
+          className="max-w-lg w-full rounded-2xl bg-[#0e1520]/90 border border-white/[0.09] shadow-2xl p-8"
+        >
+          <p className="text-xs font-medium text-amber-400">
             APNA KAPDA &middot; Admin Console
           </p>
-          <h1 className="font-serif-display text-3xl mt-2">
+          <h1 className="text-2xl font-semibold text-white tracking-tight mt-2">
             Supabase Environment Required
           </h1>
-          <p className="text-xs text-[#5f594f] leading-relaxed mt-3">
-            Configure <code className="bg-[#f5f2eb] px-1.5 py-0.5">VITE_SUPABASE_URL</code>{' '}
+          <p className="text-sm text-slate-400 leading-relaxed mt-3">
+            Configure{' '}
+            <code className="rounded bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-xs text-slate-200">
+              VITE_SUPABASE_URL
+            </code>{' '}
             and{' '}
-            <code className="bg-[#f5f2eb] px-1.5 py-0.5">VITE_SUPABASE_ANON_KEY</code>{' '}
+            <code className="rounded bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 text-xs text-slate-200">
+              VITE_SUPABASE_ANON_KEY
+            </code>{' '}
             in your environment to authenticate administrators. Never expose the
             service-role key in frontend variables.
           </p>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -117,77 +140,95 @@ export function AdminLogin({
     const signedEmail =
       sessionState.profile?.email || sessionState.user.email || 'Unknown user';
     return (
-      <div className="min-h-screen bg-[#151412] text-[#f5f2eb] flex items-center justify-center p-6">
-        <div className="max-w-lg w-full bg-[#fffdf8] text-[#211f1b] border border-[#e5dfd3] p-8">
-          <div className="flex items-center gap-3 text-[#b91c1c]">
-            <ShieldAlert className="w-6 h-6 shrink-0" />
-            <p className="text-[11px] tracking-[0.22em] uppercase font-bold">
+      <div className={BACKDROP_STYLE}>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: ADMIN_EASE }}
+          className="max-w-lg w-full rounded-2xl bg-[#0e1520]/90 border border-white/[0.09] shadow-2xl p-8"
+        >
+          <div className="flex items-center gap-2.5 text-rose-400">
+            <ShieldAlert className="w-5 h-5 shrink-0" />
+            <p className="text-xs font-semibold tracking-wide">
               403 &middot; Access Restricted
             </p>
           </div>
 
-          <h1 className="font-serif-display text-3xl mt-3">
+          <h1 className="text-2xl font-semibold text-white tracking-tight mt-3">
             Administrator Privilege Required
           </h1>
-          <p className="text-xs text-[#5f594f] leading-relaxed mt-3">
-            Signed in as <strong className="text-[#211f1b]">{signedEmail}</strong> (role:{' '}
-            <span className="font-mono">{sessionState.profile?.role ?? 'customer'}</span>).{' '}
+          <p className="text-sm text-slate-400 leading-relaxed mt-3">
+            Signed in as <strong className="text-slate-100">{signedEmail}</strong>{' '}
+            (role:{' '}
+            <span className="font-mono text-amber-300">
+              {sessionState.profile?.role ?? 'customer'}
+            </span>
+            ).{' '}
             {sessionState.reason ||
               'Only accounts explicitly authorized with role = admin can enter this portal.'}
           </p>
 
-          <div className="mt-5 p-4 bg-[#f5f2eb] border border-[#e5dfd3]">
-            <p className="text-[10px] tracking-[0.18em] uppercase font-bold text-[#9a6746] mb-2">
+          <div className="mt-5 p-4 rounded-xl bg-[#080d14] border border-white/[0.08]">
+            <p className="text-xs font-medium text-amber-400 mb-2">
               Authorize Your Account in Supabase SQL Editor
             </p>
-            <pre className="text-[11px] font-mono text-[#211f1b] overflow-x-auto whitespace-pre-wrap leading-relaxed">
+            <pre className="text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
 {`update public.profiles
 set role = 'admin'
 where lower(email) = lower('${signedEmail}');`}
             </pre>
           </div>
 
-          <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={handleSignOut}
-              className="inline-flex items-center gap-2 px-5 py-3 bg-[#24231f] text-white text-[11px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 transition-colors cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
               <span>Sign Out</span>
             </button>
-            <span className="text-[11px] text-[#817b70]">
+            <span className="text-xs text-slate-500">
               Enforced by Supabase RLS
             </span>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#151412] flex items-center justify-center p-5 sm:p-8">
-      <div className="w-full max-w-[440px] bg-[#fffdf8] border border-[#e5dfd3] p-8 sm:p-10">
-        <div className="pb-6 border-b border-[#e5dfd3]">
-          <div className="flex items-center justify-between">
-            <span className="font-serif-display text-2xl tracking-[0.04em] text-[#211f1b] font-semibold">
+    <div className={BACKDROP_STYLE}>
+      <motion.div
+        initial={{ opacity: 0, y: 14, scale: 0.99 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.35, ease: ADMIN_EASE }}
+        className="w-full max-w-[430px] rounded-2xl bg-[#0e1520]/90 border border-white/[0.09] shadow-2xl p-7 sm:p-9"
+      >
+        <div className="pb-6 border-b border-white/[0.08] flex items-center justify-between">
+          <div>
+            <span className="font-serif-display text-2xl tracking-[0.04em] text-white font-semibold">
               APNA KAPDA
             </span>
-            <Lock className="w-4 h-4 text-[#9a6746]" />
+            <p className="text-xs text-slate-400 mt-1">
+              Admin Operations Console
+            </p>
           </div>
-          <p className="text-[10px] tracking-[0.24em] uppercase text-[#817b70] mt-2 font-semibold">
-            Private Operations Console
-          </p>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/12 border border-amber-500/25 flex items-center justify-center text-amber-400">
+            <Lock className="w-4 h-4" />
+          </div>
         </div>
 
         {isRecoveryMode ? (
           <form onSubmit={handleUpdatePassword} className="mt-6 space-y-4">
-            <div className="flex items-center gap-2 text-[#211f1b]">
-              <KeyRound className="w-4 h-4 text-[#9a6746]" />
-              <h1 className="font-serif-display text-2xl">Set New Password</h1>
+            <div className="flex items-center gap-2.5 text-white">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              <h1 className="text-xl font-semibold tracking-tight">
+                Set New Password
+              </h1>
             </div>
             <div>
-              <label className="block text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 New Administrator Password
               </label>
               <input
@@ -197,17 +238,17 @@ where lower(email) = lower('${signedEmail}');`}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
-                className="w-full px-3.5 py-2.5 text-sm bg-[#f5f2eb]/60 border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#080d14] border border-white/[0.1] focus:border-amber-400/70 outline-none text-white placeholder:text-slate-500 transition-colors"
               />
             </div>
 
             {error && (
-              <p className="text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] p-3">
+              <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-xl p-3">
                 {error}
               </p>
             )}
             {successMsg && (
-              <p className="text-xs text-[#2b6345] bg-[#ecfdf5] border border-[#a7f3d0] p-3">
+              <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3">
                 {successMsg}
               </p>
             )}
@@ -215,7 +256,7 @@ where lower(email) = lower('${signedEmail}');`}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3.5 bg-[#24231f] text-white text-[11px] tracking-[0.18em] uppercase font-semibold hover:bg-[#9a6746] transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Updating...' : 'Update Password'}
             </button>
@@ -223,16 +264,16 @@ where lower(email) = lower('${signedEmail}');`}
         ) : mode === 'login' ? (
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
             <div>
-              <h1 className="font-serif-display text-2xl text-[#211f1b]">
+              <h1 className="text-xl font-semibold text-white tracking-tight">
                 Administrator Sign In
               </h1>
-              <p className="text-xs text-[#817b70] mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Authorized personnel only. Public registration is disabled.
               </p>
             </div>
 
             <div>
-              <label className="block text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Admin Email
               </label>
               <input
@@ -242,13 +283,13 @@ where lower(email) = lower('${signedEmail}');`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@apnakapda.com"
-                className="w-full px-3.5 py-2.5 text-sm bg-[#f5f2eb]/60 border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#080d14] border border-white/[0.1] focus:border-amber-400/70 outline-none text-white placeholder:text-slate-500 transition-colors"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f]">
+                <label className="block text-xs font-medium text-slate-300">
                   Password
                 </label>
                 <button
@@ -258,7 +299,7 @@ where lower(email) = lower('${signedEmail}');`}
                     setSuccessMsg('');
                     setMode('forgot');
                   }}
-                  className="text-[11px] text-[#9a6746] hover:text-[#211f1b] transition-colors cursor-pointer"
+                  className="text-xs text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
                 >
                   Forgot password?
                 </button>
@@ -271,13 +312,13 @@ where lower(email) = lower('${signedEmail}');`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  className="w-full px-3.5 py-2.5 pr-10 text-sm bg-[#f5f2eb]/60 border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl text-sm bg-[#080d14] border border-white/[0.1] focus:border-amber-400/70 outline-none text-white placeholder:text-slate-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#817b70] hover:text-[#211f1b] cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -289,7 +330,7 @@ where lower(email) = lower('${signedEmail}');`}
             </div>
 
             {error && (
-              <p className="text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] p-3">
+              <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-xl p-3">
                 {error}
               </p>
             )}
@@ -297,24 +338,25 @@ where lower(email) = lower('${signedEmail}');`}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3.5 bg-[#24231f] text-white text-[11px] tracking-[0.18em] uppercase font-semibold hover:bg-[#9a6746] transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 transition-colors disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
             >
-              {submitting ? 'Verifying Role...' : 'Enter Admin Portal'}
+              <span>{submitting ? 'Verifying Role...' : 'Enter Admin Portal'}</span>
+              {!submitting && <ArrowRight className="w-3.5 h-3.5" />}
             </button>
           </form>
         ) : (
           <form onSubmit={handleForgot} className="mt-6 space-y-4">
             <div>
-              <h1 className="font-serif-display text-2xl text-[#211f1b]">
+              <h1 className="text-xl font-semibold text-white tracking-tight">
                 Reset Admin Password
               </h1>
-              <p className="text-xs text-[#817b70] mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Receive a password recovery link for your authorized admin account.
               </p>
             </div>
 
             <div>
-              <label className="block text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Admin Email
               </label>
               <input
@@ -323,17 +365,17 @@ where lower(email) = lower('${signedEmail}');`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@apnakapda.com"
-                className="w-full px-3.5 py-2.5 text-sm bg-[#f5f2eb]/60 border border-[#e5dfd3] focus:border-[#9a6746] outline-none text-[#211f1b]"
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#080d14] border border-white/[0.1] focus:border-amber-400/70 outline-none text-white placeholder:text-slate-500 transition-colors"
               />
             </div>
 
             {error && (
-              <p className="text-xs text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] p-3">
+              <p className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-xl p-3">
                 {error}
               </p>
             )}
             {successMsg && (
-              <p className="text-xs text-[#2b6345] bg-[#ecfdf5] border border-[#a7f3d0] p-3">
+              <p className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3">
                 {successMsg}
               </p>
             )}
@@ -341,7 +383,7 @@ where lower(email) = lower('${signedEmail}');`}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3.5 bg-[#24231f] text-white text-[11px] tracking-[0.18em] uppercase font-semibold hover:bg-[#9a6746] transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-amber-500 text-slate-950 text-xs font-semibold hover:bg-amber-400 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {submitting ? 'Sending Link...' : 'Send Recovery Link'}
             </button>
@@ -353,18 +395,18 @@ where lower(email) = lower('${signedEmail}');`}
                 setSuccessMsg('');
                 setMode('login');
               }}
-              className="w-full py-2 text-xs text-[#817b70] hover:text-[#211f1b] transition-colors cursor-pointer"
+              className="w-full py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               &larr; Back to sign in
             </button>
           </form>
         )}
 
-        <p className="mt-6 pt-5 border-t border-[#e5dfd3] text-[11px] text-[#817b70] leading-relaxed">
+        <p className="mt-6 pt-5 border-t border-white/[0.08] text-xs text-slate-500 leading-relaxed">
           Role enforcement is verified server-side via PostgreSQL Row Level Security (
-          <code className="text-[#211f1b]">public.is_admin()</code>).
+          <code className="text-slate-300">public.is_admin()</code>).
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }

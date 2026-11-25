@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -21,6 +22,7 @@ import type {
   StorefrontBanner,
   StorefrontBannerDestinationType,
 } from '../types';
+import { ADMIN_EASE, AdminTableSkeleton } from './AdminMotion';
 import {
   deleteAdminBanner,
   deleteAdminOffer,
@@ -83,24 +85,24 @@ function getScheduleBadge(
   if (!isActive) {
     return {
       label: 'Paused',
-      className: 'border-[#e5dfd3] bg-[#f5f2eb] text-[#817b70]',
+      className: 'border-slate-500/25 bg-slate-500/15 text-slate-300',
     };
   }
   if (endMs !== null && now > endMs) {
     return {
       label: 'Expired',
-      className: 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]',
+      className: 'border-rose-500/25 bg-rose-500/12 text-rose-300',
     };
   }
   if (startMs !== null && now < startMs) {
     return {
       label: 'Scheduled',
-      className: 'border-[#fde68a] bg-[#fffbeb] text-[#92400e]',
+      className: 'border-amber-500/30 bg-amber-500/14 text-amber-300',
     };
   }
   return {
     label: 'Live',
-    className: 'border-[#2b6345] bg-[#ecfdf5] text-[#2b6345]',
+    className: 'border-emerald-500/25 bg-emerald-500/12 text-emerald-300',
   };
 }
 
@@ -447,17 +449,17 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
     : liveBannerInDb?.cta_text || '';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header & Sub-Navigation */}
-      <div className="bg-[#fffdf8] border border-[#e5dfd3] p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <p className="text-[10px] tracking-[0.22em] uppercase text-[#9a6746] font-bold">
+          <p className="text-[11px] tracking-[0.2em] uppercase text-amber-400 font-semibold">
             Promotions &amp; Merchandising
           </p>
-          <h1 className="font-serif-display text-2xl sm:text-3xl text-[#211f1b] mt-1">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white mt-1">
             Offers, Coupons &amp; Storefront Banner
           </h1>
-          <p className="text-xs text-[#5f594f] mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Server-validated automatic offers &amp; coupon codes (no stacking: customer receives one active offer per order).
           </p>
         </div>
@@ -466,10 +468,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           <button
             type="button"
             onClick={() => setSubTab('offers')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-[10px] tracking-[0.16em] uppercase font-semibold border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-[0.12em] uppercase font-semibold border transition-colors cursor-pointer ${
               subTab === 'offers'
-                ? 'bg-[#24231f] text-white border-[#24231f]'
-                : 'bg-[#fffdf8] text-[#5f594f] border-[#e5dfd3] hover:border-[#24231f]'
+                ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
+                : 'bg-white/[0.03] text-slate-300 border-white/[0.1] hover:bg-white/[0.07] hover:text-white'
             }`}
           >
             <Tag className="w-3.5 h-3.5" />
@@ -479,10 +481,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
           <button
             type="button"
             onClick={() => setSubTab('banner')}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-[10px] tracking-[0.16em] uppercase font-semibold border transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[11px] tracking-[0.12em] uppercase font-semibold border transition-colors cursor-pointer ${
               subTab === 'banner'
-                ? 'bg-[#24231f] text-white border-[#24231f]'
-                : 'bg-[#fffdf8] text-[#5f594f] border-[#e5dfd3] hover:border-[#24231f]'
+                ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
+                : 'bg-white/[0.03] text-slate-300 border-white/[0.1] hover:bg-white/[0.07] hover:text-white'
             }`}
           >
             <Megaphone className="w-3.5 h-3.5" />
@@ -492,23 +494,41 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       </div>
 
       {migrationMissing && (
-        <div className="p-4 bg-[#fffbeb] border border-[#fde68a] text-xs text-[#92400e] flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
           <div className="space-y-1">
-            <p className="font-semibold">Offers &amp; Banner SQL Migration Required</p>
-            <p>
-              Run <code className="bg-[#fef3c7] px-1.5 py-0.5">supabase/offers_migration.sql</code> in Supabase SQL Editor to create{' '}
-              <code className="bg-[#fef3c7] px-1.5 py-0.5">public.offers</code>,{' '}
-              <code className="bg-[#fef3c7] px-1.5 py-0.5">public.offer_redemptions</code>,{' '}
-              <code className="bg-[#fef3c7] px-1.5 py-0.5">public.storefront_banners</code>, and{' '}
-              <code className="bg-[#fef3c7] px-1.5 py-0.5">preview_checkout_discount</code>.
+            <p className="font-semibold text-amber-100">
+              Offers &amp; Banner SQL Migration Required
+            </p>
+            <p className="text-amber-200/90 leading-relaxed">
+              Run{' '}
+              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                supabase/offers_migration.sql
+              </code>{' '}
+              in Supabase SQL Editor to create{' '}
+              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                public.offers
+              </code>
+              ,{' '}
+              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                public.offer_redemptions
+              </code>
+              ,{' '}
+              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                public.storefront_banners
+              </code>
+              , and{' '}
+              <code className="bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                preview_checkout_discount
+              </code>
+              .
             </p>
           </div>
         </div>
       )}
 
       {loadError && !migrationMissing && (
-        <div className="p-4 bg-[#fef2f2] border border-[#fecaca] text-xs text-[#b91c1c] flex items-center gap-2.5">
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200 flex items-center gap-2.5">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{loadError}</span>
         </div>
@@ -517,10 +537,10 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {notice && (
         <div
           role="status"
-          className={`p-3.5 border text-xs flex items-center gap-2.5 ${
+          className={`p-3.5 rounded-xl border text-xs flex items-center gap-2.5 ${
             notice.type === 'err'
-              ? 'bg-[#fef2f2] border-[#fecaca] text-[#b91c1c]'
-              : 'bg-[#ecfdf5] border-[#a7f3d0] text-[#2b6345]'
+              ? 'bg-rose-500/10 border-rose-500/25 text-rose-200'
+              : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200'
           }`}
         >
           {notice.type === 'err' ? (
@@ -538,414 +558,422 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {subTab === 'offers' && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-[#5f594f]">
-              Active policy: <strong className="text-[#211f1b]">Single Best Offer (No Stacking)</strong> — coupon codes take priority when entered; otherwise the highest eligible automatic offer applies.
+            <p className="text-xs text-slate-400">
+              Active policy:{' '}
+              <strong className="text-slate-100">
+                Single Best Offer (No Stacking)
+              </strong>{' '}
+              — coupon codes take priority when entered; otherwise the highest eligible automatic offer applies.
             </p>
             <button
               type="button"
               disabled={migrationMissing}
               onClick={openCreateOffer}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-45"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-45"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create Offer / Coupon</span>
             </button>
           </div>
 
-          {offerFormOpen && (
-            <form
-              onSubmit={handleSaveOffer}
-              className="bg-[#fffdf8] border border-[#d6c2a8] p-6 space-y-5"
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-[#e5dfd3]">
-                <div>
-                  <p className="text-[10px] tracking-[0.2em] uppercase text-[#9a6746] font-bold">
-                    {editingOfferId ? 'Edit Offer' : 'New Offer / Coupon'}
-                  </p>
-                  <h2 className="font-serif-display text-2xl text-[#211f1b]">
-                    {editingOfferId ? offerTitle || 'Edit Offer' : 'Configure Discount Rule'}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOfferFormOpen(false);
-                    resetOfferForm();
-                  }}
-                  aria-label="Close offer form"
-                  className="p-1.5 text-[#817b70] hover:text-[#211f1b] cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Offer Title *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={offerTitle}
-                    onChange={(e) => setOfferTitle(e.target.value)}
-                    placeholder="e.g. Festive Welcome 15% Off"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Short Description
-                  </label>
-                  <input
-                    type="text"
-                    value={offerDescription}
-                    onChange={(e) => setOfferDescription(e.target.value)}
-                    placeholder="e.g. Valid on orders above ₹1,499"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Discount Mode *
-                  </label>
-                  <select
-                    value={discountMode}
-                    onChange={(e) =>
-                      setDiscountMode(e.target.value as OfferDiscountMode)
-                    }
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  >
-                    <option value="coupon">Coupon Code (Entered at Checkout)</option>
-                    <option value="automatic">Automatic Offer (Auto-Applied)</option>
-                  </select>
-                </div>
-
-                {discountMode === 'coupon' ? (
+          <AnimatePresence>
+            {offerFormOpen && (
+              <motion.form
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2, ease: ADMIN_EASE }}
+                onSubmit={handleSaveOffer}
+                className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-6 space-y-5"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
                   <div>
-                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                      Coupon Code *
+                    <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                      {editingOfferId ? 'Edit Offer' : 'New Offer / Coupon'}
+                    </p>
+                    <h2 className="text-xl font-semibold text-white mt-0.5">
+                      {editingOfferId ? offerTitle || 'Edit Offer' : 'Configure Discount Rule'}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferFormOpen(false);
+                      resetOfferForm();
+                    }}
+                    aria-label="Close offer form"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Offer Title *
                     </label>
                     <input
                       type="text"
                       required
-                      value={couponCode}
-                      onChange={(e) =>
-                        setCouponCode(
-                          e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '')
-                        )
-                      }
-                      placeholder="WELCOME10"
-                      maxLength={32}
-                      className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] font-mono uppercase"
+                      value={offerTitle}
+                      onChange={(e) => setOfferTitle(e.target.value)}
+                      placeholder="e.g. Festive Welcome 15% Off"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
                     />
                   </div>
-                ) : (
-                  <div className="flex items-end pb-2 text-[11px] text-[#817b70]">
-                    No coupon code required — automatically evaluates eligible carts.
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Short Description
+                    </label>
+                    <input
+                      type="text"
+                      value={offerDescription}
+                      onChange={(e) => setOfferDescription(e.target.value)}
+                      placeholder="e.g. Valid on orders above ₹1,499"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                    />
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Discount Type *
-                  </label>
-                  <select
-                    value={discountType}
-                    onChange={(e) =>
-                      setDiscountType(e.target.value as OfferDiscountType)
-                    }
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  >
-                    <option value="percentage">Percentage Discount (%)</option>
-                    <option value="fixed">Fixed Amount Discount (₹ INR)</option>
-                  </select>
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Discount Mode *
+                    </label>
+                    <select
+                      value={discountMode}
+                      onChange={(e) =>
+                        setDiscountMode(e.target.value as OfferDiscountMode)
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                    >
+                      <option value="coupon">Coupon Code (Entered at Checkout)</option>
+                      <option value="automatic">Automatic Offer (Auto-Applied)</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Discount Value ({discountType === 'percentage' ? '%' : '₹'}) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    max={discountType === 'percentage' ? 100 : undefined}
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  {discountMode === 'coupon' ? (
+                    <div>
+                      <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                        Coupon Code *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={couponCode}
+                        onChange={(e) =>
+                          setCouponCode(
+                            e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '')
+                          )
+                        }
+                        placeholder="WELCOME10"
+                        maxLength={32}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-amber-300 placeholder:text-slate-500 outline-none focus:border-amber-400/60 font-mono uppercase"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-end pb-2.5 text-[11px] text-slate-400">
+                      No coupon code required — automatically evaluates eligible carts.
+                    </div>
+                  )}
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Minimum Cart Value (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={minCartValue}
-                    onChange={(e) => setMinCartValue(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Discount Type *
+                    </label>
+                    <select
+                      value={discountType}
+                      onChange={(e) =>
+                        setDiscountType(e.target.value as OfferDiscountType)
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                    >
+                      <option value="percentage">Percentage Discount (%)</option>
+                      <option value="fixed">Fixed Amount Discount (₹ INR)</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Max Discount Cap (₹, Optional)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={maxDiscount}
-                    onChange={(e) => setMaxDiscount(e.target.value)}
-                    placeholder="Unlimited"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Discount Value ({discountType === 'percentage' ? '%' : '₹'}) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={discountType === 'percentage' ? 100 : undefined}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Total Usage Limit (Optional)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={totalUsageLimit}
-                    onChange={(e) => setTotalUsageLimit(e.target.value)}
-                    placeholder="Unlimited"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Minimum Cart Value (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={minCartValue}
+                      onChange={(e) => setMinCartValue(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Per-Customer Usage Limit (Optional)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={perCustomerLimit}
-                    onChange={(e) => setPerCustomerLimit(e.target.value)}
-                    placeholder="Unlimited"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Max Discount Cap (₹, Optional)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={maxDiscount}
+                      onChange={(e) => setMaxDiscount(e.target.value)}
+                      placeholder="Unlimited"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Start Date &amp; Time (Optional)
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Total Usage Limit (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={totalUsageLimit}
+                      onChange={(e) => setTotalUsageLimit(e.target.value)}
+                      placeholder="Unlimited"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Expiry Date &amp; Time (Optional)
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Per-Customer Usage Limit (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={perCustomerLimit}
+                      onChange={(e) => setPerCustomerLimit(e.target.value)}
+                      placeholder="Unlimited"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60 tabular-nums"
+                    />
+                  </div>
 
-              {/* Target Scope */}
-              <div className="pt-3 border-t border-[#e5dfd3] space-y-3 text-xs">
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-2">
-                    Applies To *
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { id: 'all', label: 'All Products' },
-                        { id: 'categories', label: 'Specific Categories' },
-                        { id: 'products', label: 'Specific Products' },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setAppliesTo(opt.id)}
-                        className={`px-3.5 py-2 text-[11px] border transition-colors cursor-pointer ${
-                          appliesTo === opt.id
-                            ? 'bg-[#24231f] text-white border-[#24231f]'
-                            : 'bg-[#fffdf8] text-[#5f594f] border-[#e5dfd3] hover:border-[#24231f]'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Start Date &amp; Time (Optional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={startsAt}
+                      onChange={(e) => setStartsAt(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Expiry Date &amp; Time (Optional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={expiresAt}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                    />
                   </div>
                 </div>
 
-                {appliesTo === 'categories' && (
-                  <div className="p-3.5 bg-[#f5f2eb] border border-[#e5dfd3]">
-                    <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-2">
-                      Select Categories ({selectedCategories.length} selected)
-                    </p>
-                    <div className="flex flex-wrap gap-4">
-                      {CATEGORIES.map((cat) => {
-                        const checked = selectedCategories.includes(cat);
-                        return (
-                          <label
-                            key={cat}
-                            className="inline-flex items-center gap-2 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedCategories((prev) =>
-                                    Array.from(new Set([...prev, cat]))
-                                  );
-                                } else {
-                                  setSelectedCategories((prev) =>
-                                    prev.filter((c) => c !== cat)
-                                  );
-                                }
-                              }}
-                              className="accent-[#9a6746]"
-                            />
-                            <span className="font-medium text-[#211f1b]">{cat}</span>
-                          </label>
-                        );
-                      })}
+                {/* Target Scope */}
+                <div className="pt-4 border-t border-white/[0.07] space-y-3 text-xs">
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-2">
+                      Applies To *
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { id: 'all', label: 'All Products' },
+                          { id: 'categories', label: 'Specific Categories' },
+                          { id: 'products', label: 'Specific Products' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setAppliesTo(opt.id)}
+                          className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border transition-colors cursor-pointer ${
+                            appliesTo === opt.id
+                              ? 'bg-amber-500/15 text-amber-200 border-amber-400/50'
+                              : 'bg-[#080d14] text-slate-400 border-white/[0.09] hover:text-white hover:border-white/[0.18]'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                )}
 
-                {appliesTo === 'products' && (
-                  <div className="p-3.5 bg-[#f5f2eb] border border-[#e5dfd3] space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f]">
-                        Select Target Products ({selectedProductIds.length} selected)
+                  {appliesTo === 'categories' && (
+                    <div className="p-4 rounded-xl bg-[#080d14] border border-white/[0.08]">
+                      <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-2.5">
+                        Select Categories ({selectedCategories.length} selected)
                       </p>
-                      <div className="relative w-56">
-                        <Search className="w-3.5 h-3.5 text-[#817b70] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={productPickerQuery}
-                          onChange={(e) => setProductPickerQuery(e.target.value)}
-                          placeholder="Filter products..."
-                          className="w-full pl-8 pr-2.5 py-1.5 text-[11px] bg-[#fffdf8] border border-[#e5dfd3] outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="max-h-48 overflow-y-auto divide-y divide-[#e5dfd3] bg-[#fffdf8] border border-[#e5dfd3]">
-                      {filteredProductsForPicker.length === 0 ? (
-                        <p className="p-3 text-[11px] text-[#817b70]">
-                          No products match your filter.
-                        </p>
-                      ) : (
-                        filteredProductsForPicker.map((prod) => {
-                          const checked = selectedProductIds.includes(prod.id);
+                      <div className="flex flex-wrap gap-4">
+                        {CATEGORIES.map((cat) => {
+                          const checked = selectedCategories.includes(cat);
                           return (
                             <label
-                              key={prod.id}
-                              className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-[#f5f2eb]/40 cursor-pointer"
+                              key={cat}
+                              className="inline-flex items-center gap-2 cursor-pointer"
                             >
-                              <span className="inline-flex items-center gap-2.5 min-w-0">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedProductIds((prev) =>
-                                        Array.from(new Set([...prev, prod.id]))
-                                      );
-                                    } else {
-                                      setSelectedProductIds((prev) =>
-                                        prev.filter((id) => id !== prod.id)
-                                      );
-                                    }
-                                  }}
-                                  className="accent-[#9a6746]"
-                                />
-                                <span className="truncate font-medium text-[#211f1b]">
-                                  {prod.name}
-                                </span>
-                              </span>
-                              <span className="text-[11px] text-[#817b70] shrink-0 tabular-nums">
-                                {prod.category} · {formatINR(prod.price_inr)}
-                              </span>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCategories((prev) =>
+                                      Array.from(new Set([...prev, cat]))
+                                    );
+                                  } else {
+                                    setSelectedCategories((prev) =>
+                                      prev.filter((c) => c !== cat)
+                                    );
+                                  }
+                                }}
+                                className="accent-amber-500"
+                              />
+                              <span className="font-medium text-slate-100">{cat}</span>
                             </label>
                           );
-                        })
-                      )}
+                        })}
+                      </div>
                     </div>
+                  )}
+
+                  {appliesTo === 'products' && (
+                    <div className="p-4 rounded-xl bg-[#080d14] border border-white/[0.08] space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400">
+                          Select Target Products ({selectedProductIds.length} selected)
+                        </p>
+                        <div className="relative w-56">
+                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={productPickerQuery}
+                            onChange={(e) => setProductPickerQuery(e.target.value)}
+                            placeholder="Filter products..."
+                            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-[11px] bg-[#0e1622] border border-white/[0.09] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.06] rounded-xl bg-[#0e1622]/70 border border-white/[0.07]">
+                        {filteredProductsForPicker.length === 0 ? (
+                          <p className="p-3 text-[11px] text-slate-400">
+                            No products match your filter.
+                          </p>
+                        ) : (
+                          filteredProductsForPicker.map((prod) => {
+                            const checked = selectedProductIds.includes(prod.id);
+                            return (
+                              <label
+                                key={prod.id}
+                                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-white/[0.03] cursor-pointer"
+                              >
+                                <span className="inline-flex items-center gap-2.5 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedProductIds((prev) =>
+                                          Array.from(new Set([...prev, prod.id]))
+                                        );
+                                      } else {
+                                        setSelectedProductIds((prev) =>
+                                          prev.filter((id) => id !== prod.id)
+                                        );
+                                      }
+                                    }}
+                                    className="accent-amber-500"
+                                  />
+                                  <span className="truncate font-medium text-slate-100">
+                                    {prod.name}
+                                  </span>
+                                </span>
+                                <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
+                                  {prod.category} · {formatINR(prod.price_inr)}
+                                </span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="inline-flex items-center gap-2.5 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={offerIsActive}
+                      onChange={(e) => setOfferIsActive(e.target.checked)}
+                      className="accent-amber-500"
+                    />
+                    <span className="font-medium text-slate-200">
+                      Offer is Active (evaluates immediately within schedule)
+                    </span>
+                  </label>
+                </div>
+
+                {offerFormError && (
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200">
+                    {offerFormError}
                   </div>
                 )}
 
-                <label className="inline-flex items-center gap-2.5 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={offerIsActive}
-                    onChange={(e) => setOfferIsActive(e.target.checked)}
-                    className="accent-[#9a6746]"
-                  />
-                  <span className="font-medium text-[#211f1b]">
-                    Offer is Active (evaluates immediately within schedule)
-                  </span>
-                </label>
-              </div>
-
-              {offerFormError && (
-                <div className="p-3 bg-[#fef2f2] border border-[#fecaca] text-xs text-[#b91c1c]">
-                  {offerFormError}
+                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-white/[0.07]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferFormOpen(false);
+                      resetOfferForm();
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingOffer}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {savingOffer
+                      ? 'Saving...'
+                      : editingOfferId
+                        ? 'Save Changes'
+                        : 'Publish Offer'}
+                  </button>
                 </div>
-              )}
-
-              <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-[#e5dfd3]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOfferFormOpen(false);
-                    resetOfferForm();
-                  }}
-                  className="px-4 py-2.5 border border-[#e5dfd3] text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] hover:text-[#211f1b] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingOffer}
-                  className="px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {savingOffer
-                    ? 'Saving...'
-                    : editingOfferId
-                      ? 'Save Changes'
-                      : 'Publish Offer'}
-                </button>
-              </div>
-            </form>
-          )}
+              </motion.form>
+            )}
+          </AnimatePresence>
 
           {/* Offers List */}
-          <div className="bg-[#fffdf8] border border-[#e5dfd3] overflow-hidden">
+          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
             {loading ? (
-              <div className="p-10 text-center text-xs text-[#817b70]">
-                Loading offers &amp; coupons from Supabase...
-              </div>
+              <AdminTableSkeleton rows={5} />
             ) : offers.length === 0 ? (
               <div className="p-12 text-center">
-                <p className="font-serif-display text-2xl text-[#211f1b]">
+                <p className="text-lg font-semibold text-white">
                   No offers or coupons created yet
                 </p>
-                <p className="text-xs text-[#817b70] mt-1.5">
+                <p className="text-xs text-slate-400 mt-1.5">
                   Create an automatic storewide promotion or a coupon code for checkout.
                 </p>
               </div>
@@ -953,7 +981,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-[#e5dfd3] bg-[#f5f2eb]/50 text-[10px] tracking-[0.16em] uppercase text-[#817b70]">
+                    <tr className="border-b border-white/[0.07] bg-white/[0.02] text-[10px] tracking-[0.14em] uppercase text-slate-400">
                       <th className="py-3.5 px-4 font-semibold">Offer</th>
                       <th className="py-3.5 px-3 font-semibold">Mode / Code</th>
                       <th className="py-3.5 px-3 font-semibold">Discount</th>
@@ -963,7 +991,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                       <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#e5dfd3] text-xs">
+                  <tbody className="divide-y divide-white/[0.05] text-xs">
                     {offers.map((offer) => {
                       const badge = getScheduleBadge(
                         offer.is_active,
@@ -971,48 +999,48 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                         offer.expires_at
                       );
                       return (
-                        <tr key={offer.id} className="hover:bg-[#f5f2eb]/35">
+                        <tr key={offer.id} className="hover:bg-white/[0.025] transition-colors">
                           <td className="py-3.5 px-4">
-                            <p className="font-semibold text-[#211f1b]">{offer.title}</p>
+                            <p className="font-semibold text-white">{offer.title}</p>
                             {offer.description && (
-                              <p className="text-[11px] text-[#817b70] mt-0.5">
+                              <p className="text-[11px] text-slate-400 mt-0.5">
                                 {offer.description}
                               </p>
                             )}
                           </td>
                           <td className="py-3.5 px-3 whitespace-nowrap">
                             {offer.discount_mode === 'coupon' ? (
-                              <span className="px-2 py-1 bg-[#f5f2eb] border border-[#d6c2a8] font-mono text-[11px] font-bold text-[#211f1b]">
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/12 border border-amber-500/30 font-mono text-[11px] font-bold text-amber-300">
                                 {offer.coupon_code}
                               </span>
                             ) : (
-                              <span className="px-2 py-1 bg-[#f5f2eb] border border-[#e5dfd3] text-[10px] uppercase tracking-wider font-semibold text-[#9a6746]">
+                              <span className="px-2.5 py-1 rounded-lg bg-sky-500/12 border border-sky-500/25 text-[10px] uppercase tracking-wider font-semibold text-sky-300">
                                 Automatic
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-3 tabular-nums">
-                            <p className="font-semibold text-[#211f1b]">
+                            <p className="font-semibold text-white">
                               {offer.discount_type === 'percentage'
                                 ? `${offer.discount_value}% OFF`
                                 : `Flat ${formatINR(offer.discount_value)} OFF`}
                             </p>
-                            <p className="text-[11px] text-[#817b70]">
+                            <p className="text-[11px] text-slate-400">
                               Min: {formatINR(offer.min_cart_value_inr)}
                               {offer.max_discount_inr !== null
                                 ? ` · Cap: ${formatINR(offer.max_discount_inr)}`
                                 : ''}
                             </p>
                           </td>
-                          <td className="py-3.5 px-3 text-[11px] text-[#5f594f]">
-                            <p className="font-medium text-[#211f1b]">
+                          <td className="py-3.5 px-3 text-[11px] text-slate-300">
+                            <p className="font-medium text-slate-100">
                               {offer.applies_to === 'all'
                                 ? 'All Products'
                                 : offer.applies_to === 'categories'
                                   ? `Categories: ${offer.categories.join(', ')}`
                                   : `${offer.product_ids.length} Specific Product(s)`}
                             </p>
-                            <p className="text-[#817b70] tabular-nums mt-0.5">
+                            <p className="text-slate-400 tabular-nums mt-0.5">
                               {offer.starts_at || offer.expires_at
                                 ? `${formatScheduleDate(offer.starts_at)} → ${
                                     offer.expires_at
@@ -1022,13 +1050,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                 : 'No expiry schedule'}
                             </p>
                           </td>
-                          <td className="py-3.5 px-3 tabular-nums whitespace-nowrap text-[#5f594f]">
-                            <p className="font-medium text-[#211f1b]">
+                          <td className="py-3.5 px-3 tabular-nums whitespace-nowrap text-slate-300">
+                            <p className="font-medium text-white">
                               {offer.usage_count} /{' '}
                               {offer.total_usage_limit ?? '∞'}
                             </p>
                             {offer.per_customer_usage_limit !== null && (
-                              <p className="text-[10px] text-[#817b70]">
+                              <p className="text-[10px] text-slate-400">
                                 Max {offer.per_customer_usage_limit}/customer
                               </p>
                             )}
@@ -1038,7 +1066,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                               type="button"
                               onClick={() => handleToggleOfferActive(offer)}
                               title="Toggle Active / Paused"
-                              className={`px-2.5 py-1 text-[10px] tracking-[0.12em] uppercase font-semibold border cursor-pointer ${badge.className}`}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border cursor-pointer transition-opacity hover:opacity-85 ${badge.className}`}
                             >
                               {badge.label}
                             </button>
@@ -1049,7 +1077,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                 type="button"
                                 onClick={() => openEditOffer(offer)}
                                 aria-label={`Edit ${offer.title}`}
-                                className="p-1.5 border border-[#e5dfd3] text-[#5f594f] hover:text-[#211f1b] hover:border-[#24231f] cursor-pointer"
+                                className="p-1.5 rounded-lg border border-white/[0.1] text-slate-300 hover:text-white hover:bg-white/[0.07] cursor-pointer transition-colors"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -1057,7 +1085,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                                 type="button"
                                 onClick={() => setConfirmDeleteOffer(offer)}
                                 aria-label={`Delete ${offer.title}`}
-                                className="p-1.5 border border-[#e5dfd3] text-[#817b70] hover:text-[#b91c1c] hover:border-[#fecaca] cursor-pointer"
+                                className="p-1.5 rounded-lg border border-white/[0.1] text-slate-400 hover:text-rose-300 hover:border-rose-500/35 hover:bg-rose-500/10 cursor-pointer transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1080,13 +1108,13 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       {subTab === 'banner' && (
         <div className="space-y-5">
           {/* Live Storefront Bar Preview */}
-          <div className="bg-[#fffdf8] border border-[#e5dfd3] p-5 space-y-3">
+          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] tracking-[0.2em] uppercase text-[#9a6746] font-bold">
+                <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
                   Live Announcement Bar Preview
                 </p>
-                <p className="text-xs text-[#5f594f] mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   {bannerFormOpen
                     ? 'Previewing your current draft below before publishing.'
                     : liveBannerInDb
@@ -1099,7 +1127,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   type="button"
                   disabled={migrationMissing}
                   onClick={openCreateBanner}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-45"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-45"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Create Promotional Banner</span>
@@ -1107,8 +1135,9 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
               )}
             </div>
 
-            <div className="border border-[#e5dfd3] overflow-hidden">
-              <div className="bg-[#24231f] text-[#eee6d8] h-8 px-4 flex items-center justify-center relative text-[10px] tracking-[0.18em] uppercase">
+            {/* Authentic Storefront Top Bar Preview */}
+            <div className="rounded-xl border border-white/[0.1] overflow-hidden">
+              <div className="bg-[#24231f] text-[#eee6d8] h-9 px-4 flex items-center justify-center relative text-[10px] tracking-[0.18em] uppercase">
                 <span className="truncate flex items-center gap-2">
                   {previewBannerTitle && (
                     <strong className="text-[#d6b38d] font-bold">
@@ -1126,245 +1155,249 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
             </div>
           </div>
 
-          {bannerFormOpen && (
-            <form
-              onSubmit={handleSaveBanner}
-              className="bg-[#fffdf8] border border-[#d6c2a8] p-6 space-y-4 text-xs"
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-[#e5dfd3]">
-                <div>
-                  <p className="text-[10px] tracking-[0.2em] uppercase text-[#9a6746] font-bold">
-                    {editingBannerId ? 'Edit Banner' : 'New Storefront Banner'}
-                  </p>
-                  <h2 className="font-serif-display text-2xl text-[#211f1b]">
-                    Configure Top Announcement Bar
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBannerFormOpen(false);
-                    resetBannerForm();
-                  }}
-                  aria-label="Close banner form"
-                  className="p-1.5 text-[#817b70] hover:text-[#211f1b] cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Offer Prefix / Tag (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={bannerOfferTitle}
-                    onChange={(e) => setBannerOfferTitle(e.target.value)}
-                    placeholder="e.g. FESTIVE EDIT"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    CTA Link Text (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={bannerCtaText}
-                    onChange={(e) => setBannerCtaText(e.target.value)}
-                    placeholder="Shop Now"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Banner Message Text *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={bannerText}
-                    onChange={(e) => setBannerText(e.target.value)}
-                    placeholder="e.g. Flat 15% Off Above ₹1,999 · Use Code WELCOME15"
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Click Destination
-                  </label>
-                  <select
-                    value={bannerDestType}
-                    onChange={(e) => {
-                      const next = e.target.value as StorefrontBannerDestinationType;
-                      setBannerDestType(next);
-                      setBannerDestValue(
-                        next === 'category'
-                          ? 'Men'
-                          : next === 'product'
-                            ? products[0]?.id || ''
-                            : ''
-                      );
+          <AnimatePresence>
+            {bannerFormOpen && (
+              <motion.form
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2, ease: ADMIN_EASE }}
+                onSubmit={handleSaveBanner}
+                className="rounded-2xl bg-[#0e1622]/90 border border-amber-500/25 p-6 space-y-4 text-xs"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-white/[0.07]">
+                  <div>
+                    <p className="text-[11px] tracking-[0.18em] uppercase text-amber-400 font-semibold">
+                      {editingBannerId ? 'Edit Banner' : 'New Storefront Banner'}
+                    </p>
+                    <h2 className="text-xl font-semibold text-white mt-0.5">
+                      Configure Top Announcement Bar
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBannerFormOpen(false);
+                      resetBannerForm();
                     }}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
+                    aria-label="Close banner form"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
                   >
-                    <option value="shop">Storefront Catalog (#shop)</option>
-                    <option value="category">Specific Category Collection</option>
-                    <option value="product">Specific Product Page</option>
-                    <option value="url">Custom Section / Internal Path</option>
-                  </select>
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div>
-                  {bannerDestType === 'category' && (
-                    <>
-                      <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                        Target Category
-                      </label>
-                      <select
-                        value={bannerDestValue || 'Men'}
-                        onChange={(e) => setBannerDestValue(e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                      >
-                        {CATEGORIES.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                  {bannerDestType === 'product' && (
-                    <>
-                      <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                        Target Product
-                      </label>
-                      <select
-                        value={bannerDestValue}
-                        onChange={(e) => setBannerDestValue(e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                      >
-                        <option value="">Select a product...</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({formatINR(p.price_inr)})
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                  {bannerDestType === 'url' && (
-                    <>
-                      <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                        Section ID or Path (e.g. #collections or #story)
-                      </label>
-                      <input
-                        type="text"
-                        value={bannerDestValue}
-                        onChange={(e) => setBannerDestValue(e.target.value)}
-                        placeholder="#collections"
-                        className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746]"
-                      />
-                    </>
-                  )}
-                  {bannerDestType === 'shop' && (
-                    <div className="pt-6 text-[11px] text-[#817b70]">
-                      Clicking the CTA scrolls cleanly to the Shop catalog grid.
-                    </div>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Offer Prefix / Tag (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerOfferTitle}
+                      onChange={(e) => setBannerOfferTitle(e.target.value)}
+                      placeholder="e.g. FESTIVE EDIT"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      CTA Link Text (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={bannerCtaText}
+                      onChange={(e) => setBannerCtaText(e.target.value)}
+                      placeholder="Shop Now"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Banner Message Text *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={bannerText}
+                      onChange={(e) => setBannerText(e.target.value)}
+                      placeholder="e.g. Flat 15% Off Above ₹1,999 · Use Code WELCOME15"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Click Destination
+                    </label>
+                    <select
+                      value={bannerDestType}
+                      onChange={(e) => {
+                        const next = e.target.value as StorefrontBannerDestinationType;
+                        setBannerDestType(next);
+                        setBannerDestValue(
+                          next === 'category'
+                            ? 'Men'
+                            : next === 'product'
+                              ? products[0]?.id || ''
+                              : ''
+                        );
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                    >
+                      <option value="shop">Storefront Catalog (#shop)</option>
+                      <option value="category">Specific Category Collection</option>
+                      <option value="product">Specific Product Page</option>
+                      <option value="url">Custom Section / Internal Path</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    {bannerDestType === 'category' && (
+                      <>
+                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                          Target Category
+                        </label>
+                        <select
+                          value={bannerDestValue || 'Men'}
+                          onChange={(e) => setBannerDestValue(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                        >
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    {bannerDestType === 'product' && (
+                      <>
+                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                          Target Product
+                        </label>
+                        <select
+                          value={bannerDestValue}
+                          onChange={(e) => setBannerDestValue(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60"
+                        >
+                          <option value="">Select a product...</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({formatINR(p.price_inr)})
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    {bannerDestType === 'url' && (
+                      <>
+                        <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                          Section ID or Path (e.g. #collections or #story)
+                        </label>
+                        <input
+                          type="text"
+                          value={bannerDestValue}
+                          onChange={(e) => setBannerDestValue(e.target.value)}
+                          placeholder="#collections"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-400/60"
+                        />
+                      </>
+                    )}
+                    {bannerDestType === 'shop' && (
+                      <div className="pt-6 text-[11px] text-slate-400">
+                        Clicking the CTA scrolls cleanly to the Shop catalog grid.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Start Date &amp; Time (Optional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={bannerStartsAt}
+                      onChange={(e) => setBannerStartsAt(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-slate-400 mb-1.5">
+                      Expiry Date &amp; Time (Optional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={bannerExpiresAt}
+                      onChange={(e) => setBannerExpiresAt(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-white/[0.09] bg-[#080d14] text-slate-100 outline-none focus:border-amber-400/60 tabular-nums [color-scheme:dark]"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Start Date &amp; Time (Optional)
-                  </label>
+                <label className="inline-flex items-center gap-2.5 cursor-pointer pt-1">
                   <input
-                    type="datetime-local"
-                    value={bannerStartsAt}
-                    onChange={(e) => setBannerStartsAt(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
+                    type="checkbox"
+                    checked={bannerIsActive}
+                    onChange={(e) => setBannerIsActive(e.target.checked)}
+                    className="accent-amber-500"
                   />
+                  <span className="font-medium text-slate-200">
+                    Enable Banner on Storefront (publishes live immediately within schedule without redeploying)
+                  </span>
+                </label>
+
+                {bannerFormError && (
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-200">
+                    {bannerFormError}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-white/[0.07]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBannerFormOpen(false);
+                      resetBannerForm();
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingBanner}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] tracking-[0.12em] uppercase font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {savingBanner
+                      ? 'Saving...'
+                      : editingBannerId
+                        ? 'Save Banner'
+                        : 'Publish Banner'}
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] mb-1">
-                    Expiry Date &amp; Time (Optional)
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={bannerExpiresAt}
-                    onChange={(e) => setBannerExpiresAt(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-[#e5dfd3] bg-[#fffdf8] outline-none focus:border-[#9a6746] tabular-nums"
-                  />
-                </div>
-              </div>
-
-              <label className="inline-flex items-center gap-2.5 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={bannerIsActive}
-                  onChange={(e) => setBannerIsActive(e.target.checked)}
-                  className="accent-[#9a6746]"
-                />
-                <span className="font-medium text-[#211f1b]">
-                  Enable Banner on Storefront (publishes live immediately within schedule without redeploying)
-                </span>
-              </label>
-
-              {bannerFormError && (
-                <div className="p-3 bg-[#fef2f2] border border-[#fecaca] text-xs text-[#b91c1c]">
-                  {bannerFormError}
-                </div>
-              )}
-
-              <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-[#e5dfd3]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBannerFormOpen(false);
-                    resetBannerForm();
-                  }}
-                  className="px-4 py-2.5 border border-[#e5dfd3] text-[10px] tracking-[0.16em] uppercase font-semibold text-[#5f594f] hover:text-[#211f1b] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingBanner}
-                  className="px-5 py-2.5 bg-[#24231f] text-white text-[10px] tracking-[0.16em] uppercase font-semibold hover:bg-[#9a6746] transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {savingBanner
-                    ? 'Saving...'
-                    : editingBannerId
-                      ? 'Save Banner'
-                      : 'Publish Banner'}
-                </button>
-              </div>
-            </form>
-          )}
+              </motion.form>
+            )}
+          </AnimatePresence>
 
           {/* Banners List */}
-          <div className="bg-[#fffdf8] border border-[#e5dfd3] overflow-hidden">
+          <div className="rounded-2xl bg-[#0e1622]/85 border border-white/[0.08] overflow-hidden">
             {loading ? (
-              <div className="p-10 text-center text-xs text-[#817b70]">
-                Loading storefront banners from Supabase...
-              </div>
+              <AdminTableSkeleton rows={4} />
             ) : banners.length === 0 ? (
               <div className="p-12 text-center">
-                <p className="font-serif-display text-2xl text-[#211f1b]">
+                <p className="text-lg font-semibold text-white">
                   No promotional banners saved yet
                 </p>
-                <p className="text-xs text-[#817b70] mt-1.5">
+                <p className="text-xs text-slate-400 mt-1.5">
                   Create a scheduled promotional announcement bar to highlight sales or coupon codes live on the storefront.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#e5dfd3]">
+              <div className="divide-y divide-white/[0.06]">
                 {banners.map((banner) => {
                   const badge = getScheduleBadge(
                     banner.is_active,
@@ -1374,29 +1407,32 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                   return (
                     <div
                       key={banner.id}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#f5f2eb]/35"
+                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/[0.025] transition-colors"
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => handleToggleBannerActive(banner)}
-                            className={`px-2 py-0.5 text-[10px] tracking-[0.12em] uppercase font-semibold border cursor-pointer ${badge.className}`}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] tracking-[0.1em] uppercase font-semibold border cursor-pointer ${badge.className}`}
                           >
                             {badge.label}
                           </button>
                           {banner.offer_title && (
-                            <span className="text-xs font-bold text-[#9a6746] uppercase tracking-wider">
+                            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
                               {banner.offer_title}
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-medium text-[#211f1b]">
+                        <p className="text-sm font-medium text-white">
                           {banner.banner_text}
                         </p>
-                        <p className="text-[11px] text-[#817b70] tabular-nums">
-                          CTA: <strong className="text-[#211f1b]">{banner.cta_text || 'None'}</strong> →{' '}
-                          {banner.destination_type}
+                        <p className="text-[11px] text-slate-400 tabular-nums">
+                          CTA:{' '}
+                          <strong className="text-slate-200">
+                            {banner.cta_text || 'None'}
+                          </strong>{' '}
+                          → {banner.destination_type}
                           {banner.destination_value ? ` (${banner.destination_value})` : ''} ·{' '}
                           {banner.starts_at || banner.expires_at
                             ? `${formatScheduleDate(banner.starts_at)} → ${
@@ -1412,7 +1448,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                         <button
                           type="button"
                           onClick={() => handleToggleBannerActive(banner)}
-                          className="px-3 py-1.5 border border-[#e5dfd3] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#211f1b] hover:border-[#24231f] cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.08] text-[10px] tracking-[0.12em] uppercase font-semibold text-slate-200 cursor-pointer transition-colors"
                         >
                           {banner.is_active ? 'Pause' : 'Activate'}
                         </button>
@@ -1420,7 +1456,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           type="button"
                           onClick={() => openEditBanner(banner)}
                           aria-label="Edit banner"
-                          className="p-1.5 border border-[#e5dfd3] text-[#5f594f] hover:text-[#211f1b] hover:border-[#24231f] cursor-pointer"
+                          className="p-1.5 rounded-lg border border-white/[0.1] text-slate-300 hover:text-white hover:bg-white/[0.07] cursor-pointer transition-colors"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -1428,7 +1464,7 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
                           type="button"
                           onClick={() => setConfirmDeleteBanner(banner)}
                           aria-label="Delete banner"
-                          className="p-1.5 border border-[#e5dfd3] text-[#817b70] hover:text-[#b91c1c] hover:border-[#fecaca] cursor-pointer"
+                          className="p-1.5 rounded-lg border border-white/[0.1] text-slate-400 hover:text-rose-300 hover:border-rose-500/35 hover:bg-rose-500/10 cursor-pointer transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1443,90 +1479,110 @@ export function AdminOffers({ products, onDataChanged }: AdminOffersProps) {
       )}
 
       {/* Delete Offer Modal */}
-      {confirmDeleteOffer && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4"
-          onClick={() => !deletingOffer && setConfirmDeleteOffer(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md bg-[#fffdf8] border border-[#e5dfd3] p-6 space-y-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {confirmDeleteOffer && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !deletingOffer && setConfirmDeleteOffer(null)}
+            role="dialog"
+            aria-modal="true"
           >
-            <p className="text-[10px] tracking-[0.2em] uppercase text-[#b91c1c] font-bold">
-              Confirm Offer Deletion
-            </p>
-            <h3 className="font-serif-display text-2xl text-[#211f1b]">
-              Delete &ldquo;{confirmDeleteOffer.title}&rdquo;?
-            </h3>
-            <p className="text-xs text-[#5f594f] leading-relaxed">
-              Existing placed orders preserve their historical discount amounts and coupon text. This removes the active offer rule.
-            </p>
-            <div className="flex justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={deletingOffer}
-                onClick={() => setConfirmDeleteOffer(null)}
-                className="px-4 py-2 border border-[#e5dfd3] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingOffer}
-                onClick={handleDeleteOfferConfirmed}
-                className="px-4 py-2 bg-[#b91c1c] text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-[#991b1b] cursor-pointer disabled:opacity-50"
-              >
-                {deletingOffer ? 'Deleting...' : 'Delete Offer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: ADMIN_EASE }}
+              className="w-full max-w-md rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 space-y-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[11px] tracking-[0.18em] uppercase text-rose-400 font-semibold">
+                Confirm Offer Deletion
+              </p>
+              <h3 className="text-xl font-semibold text-white">
+                Delete &ldquo;{confirmDeleteOffer.title}&rdquo;?
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Existing placed orders preserve their historical discount amounts and coupon text. This removes the active offer rule.
+              </p>
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={deletingOffer}
+                  onClick={() => setConfirmDeleteOffer(null)}
+                  className="px-4 py-2 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingOffer}
+                  onClick={handleDeleteOfferConfirmed}
+                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-[11px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500 cursor-pointer disabled:opacity-50"
+                >
+                  {deletingOffer ? 'Deleting...' : 'Delete Offer'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete Banner Modal */}
-      {confirmDeleteBanner && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/55 flex items-center justify-center p-4"
-          onClick={() => !deletingBanner && setConfirmDeleteBanner(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="w-full max-w-md bg-[#fffdf8] border border-[#e5dfd3] p-6 space-y-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {confirmDeleteBanner && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !deletingBanner && setConfirmDeleteBanner(null)}
+            role="dialog"
+            aria-modal="true"
           >
-            <p className="text-[10px] tracking-[0.2em] uppercase text-[#b91c1c] font-bold">
-              Confirm Banner Deletion
-            </p>
-            <h3 className="font-serif-display text-2xl text-[#211f1b]">
-              Delete this promotional banner?
-            </h3>
-            <p className="text-xs text-[#5f594f]">
-              {confirmDeleteBanner.banner_text}
-            </p>
-            <div className="flex justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={deletingBanner}
-                onClick={() => setConfirmDeleteBanner(null)}
-                className="px-4 py-2 border border-[#e5dfd3] text-[10px] tracking-[0.14em] uppercase font-semibold text-[#5f594f] cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingBanner}
-                onClick={handleDeleteBannerConfirmed}
-                className="px-4 py-2 bg-[#b91c1c] text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-[#991b1b] cursor-pointer disabled:opacity-50"
-              >
-                {deletingBanner ? 'Deleting...' : 'Delete Banner'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: ADMIN_EASE }}
+              className="w-full max-w-md rounded-2xl bg-[#0e1520] border border-white/[0.1] p-6 space-y-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-[11px] tracking-[0.18em] uppercase text-rose-400 font-semibold">
+                Confirm Banner Deletion
+              </p>
+              <h3 className="text-xl font-semibold text-white">
+                Delete this promotional banner?
+              </h3>
+              <p className="text-xs text-slate-400">
+                {confirmDeleteBanner.banner_text}
+              </p>
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={deletingBanner}
+                  onClick={() => setConfirmDeleteBanner(null)}
+                  className="px-4 py-2 rounded-xl border border-white/[0.1] text-[11px] tracking-[0.12em] uppercase font-semibold text-slate-300 hover:text-white hover:bg-white/[0.05] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingBanner}
+                  onClick={handleDeleteBannerConfirmed}
+                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-[11px] tracking-[0.12em] uppercase font-semibold hover:bg-rose-500 cursor-pointer disabled:opacity-50"
+                >
+                  {deletingBanner ? 'Deleting...' : 'Delete Banner'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
